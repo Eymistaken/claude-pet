@@ -54,12 +54,29 @@ animasyon pet'i durdurmasın.
 
 Durum değişimlerini animasyon dizisine çeviren katman. Asıl iş burada:
 
-- **Giriş/döngü/çıkış zinciri.** `Edit` başlayınca `laptop_out` bir kez oynar,
-  bitince `typing` döngüye girer. `PostToolUse` gelince `laptop_away` oynar.
-- **Ardışık Edit çağrılarında laptop cebe girip çıkmasın.** `laptop_away`'i
-  ~400 ms gecikmeyle tetikle; bu süre içinde yeni bir Edit gelirse iptal et ve
-  `typing`'de kal. Bu, animasyonun tatlı durmasıyla sinir bozucu durması
-  arasındaki fark.
+- **Kod yazma modu YAPIŞKANDIR.** Bu fazın en önemli kuralı.
+
+  İlk `Edit` / `Write` / `NotebookEdit` gelince `laptop_out` bir kez oynar,
+  bitince `typing` döngüye girer. Ondan sonra pet **kod yazma modunda kalır**.
+
+  Araya giren `Read`, `Grep`, `Glob`, `Bash`, `WebSearch` gibi çağrılar
+  laptobu **kaldırmaz** — Claude hâlâ aynı işin içinde. Bir dosyayı okumak
+  için laptobu cebe koyup geri çıkarmak hem titrek durur hem yanlış anlatır.
+
+  `laptop_away` yalnızca gerçekten farklı bir duruma geçilince oynar:
+
+  | Çıkış tetiği | Sonrası |
+  |---|---|
+  | `WAITING_INPUT` (izin isteği, soru, plan onayı) | `wave` |
+  | `Stop` (tur bitti) | `celebrate` |
+  | `SessionEnd` | `sleep` |
+  | `sleep-timeout` kadar hiç olay gelmemesi | `sleep` |
+
+  `PostToolUseFailure` bir istisna: `shake` bir kez oynar ve **`typing`'e geri
+  döner**, laptop kalkmaz. Hata kod yazmanın parçası.
+
+  Uygulaması: `director` içinde `codingMode` diye bir bayrak tut. Yukarıdaki
+  dört tetikten biri gelmeden `false` olmasın.
 - **Tek seferlik tepkiler** araya girer, sonra önceki duruma döner:
   `PostToolUseFailure` → `shake`, `Stop` → `celebrate`.
 - **`WAITING_INPUT` her şeyi ezer.** Devam eden animasyonu kes, `wave`'e geç.
