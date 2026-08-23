@@ -123,3 +123,44 @@ otomatik. README'nin kurulum bölümü doğrulanır.
   dönmesin; statik kare + seyrek göz kırpma yeterli.
 - **GNOME sürümü.** `metadata.json` şu an `["46"]`. Yükseltmede ESM API'leri
   kırılabilir.
+
+---
+
+## Sonraki fazlara notlar
+
+Faz sırasında görülen ama o fazın kapsamına girmediği için yapılmayan işler.
+
+### Faz 0'dan
+
+- **`affectsInputRegion` Wayland'de bir şey yapmıyor.** `ui/layout.js`
+  `_updateRegions()`: `wantsInputRegion = … && !Meta.is_wayland_compositor()`.
+  Girdi yönlendirmesi sıradan Clutter picking'iyle oluyor. Davranış istediğimiz
+  gibi ama **Faz 2 buna göre yazılmalı**: laptop parçasını tıklama yutmaz yapan
+  şey `reactive: false`. `affectsInputRegion: false` niyet belgesi olarak
+  kalsın (X11'de ve ileride işe yarar), ama ona güvenilmesin.
+- **`Clutter.DragAction` GNOME 46'da yok.** Sürükleme `global.stage.grab()` +
+  el ile olay takibiyle yapılıyor. Yeni bir sürüklenebilir parça gerekirse
+  `src/extension.js` içindeki `_onPress`/`_onMotion`/`_endDrag` üçlüsü örnek.
+- **Kabuğun içinden ölçüm modülü.** Pcbridge'in `selftest.js`'i gibi bir
+  `lib/selftest.js`: `get_actor_at_pos(PickMode.REACTIVE, …)` ile hangi
+  aktörün tıklanacağını, ana döngü gecikmesini ve animasyon ölçeğini kabuğun
+  içinden raporlar. Faz 0'da bir kez geçici olarak yazıldı ve sorunu anında
+  buldu; kalıcı hâli Faz 1'de işe yarar.
+- **Ölçek (`scale_factor`).** Faz 0 dikdörtgeni 96 px sabit. Faz 1'de çizim
+  `St.ThemeContext.get_for_stage(global.stage).scale_factor` üzerinden
+  ölçeklenmeli; `PET_SIZE`/`MARGIN` sabitleri de ona bağlanmalı.
+- **`monitors-changed`.** Şu an sıkıştırma yalnızca açılışta ve sürükleme
+  bitince yapılıyor. Monitör takılıp çıkarıldığında pet ekran dışında
+  kalabilir — Faz 5'in işi.
+- **Sürükleme eşiği.** Tek tıklama da "sürükleme bitti" sayılıp konumu
+  yeniden yazıyor. Zararsız; Faz 5'te birkaç piksellik eşik eklenebilir.
+- **`gnome-extensions enable` tuzağı.** Kabuk eklentiyi henüz taramamışsa
+  D-Bus üzerinden hata veriyor (Pcbridge `install.sh` bunu belgelemiş).
+  Gerçek oturumda `make enable` patlarsa yedek yol `gsettings` ile
+  `enabled-extensions` listesini düzenlemek.
+- **Symlink ile kurulum.** `make install` kopyalıyor. Pcbridge symlink
+  kullanıyor; ESM önbelleği yüzünden her iki durumda da kabuk yeniden
+  başlaması gerektiği için kazanç sınırlı, ama Faz 6'da düşünülebilir.
+- **Test kurgusu notu.** pcbridge ile sürükleme denerken `hold` doğrudan
+  çağrılırsa imleç hedefe varmadan basılıyor ve basma ESKİ konuma düşüyor.
+  Önce `move`, sonra `hold`.

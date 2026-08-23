@@ -1,0 +1,8 @@
+{
+  "uuid": "claude-pet@eymistaken.local",
+  "name": "Claude Pet",
+  "description": "Claude Code'un durumunu masaüstünde bir maskotla gösterir.",
+  "shell-version": ["46"],
+  "settings-schema": "org.gnome.shell.extensions.claude-pet",
+  "version": 1
+}

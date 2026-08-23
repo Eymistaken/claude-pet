@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.claude-pet"
+          path="/org/gnome/shell/extensions/claude-pet/">
+
+    <key name="position-x" type="i">
+      <default>-1</default>
+      <summary>Maskotun yatay konumu</summary>
+      <description>
+        Global sahne koordinatı (tüm monitörlerin ortak uzayı).
+        -1: henüz konmadı, birincil monitörün sağ altına yerleştir.
+      </description>
+    </key>
+
+    <key name="position-y" type="i">
+      <default>-1</default>
+      <summary>Maskotun dikey konumu</summary>
+      <description>
+        Global sahne koordinatı (tüm monitörlerin ortak uzayı).
+        -1: henüz konmadı, birincil monitörün sağ altına yerleştir.
+      </description>
+    </key>
+
+  </schema>
+</schemalist>
