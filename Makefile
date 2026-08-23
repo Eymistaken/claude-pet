@@ -5,11 +5,12 @@
 
 UUID    := claude-pet@eymistaken.local
 SRC     := src
+ASSETS  := assets
 BUILD   := build
 EXT_DIR := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
 .PHONY: help schemas install uninstall enable disable \
-        nested nested-kill nested-clean nested-log logs pack
+        nested nested-kill nested-clean nested-log preview logs pack
 
 help:
 	@echo "claude-pet — hedefler"
@@ -23,6 +24,7 @@ help:
 	@echo "  make nested-log    test oturumunun logunu izle"
 	@echo "  make nested-kill   test oturumunu ve yetim servisleri kapat"
 	@echo "  make nested-clean  yalnizca yetim servisleri topla"
+	@echo "  make preview       kareleri bagimsiz pencerede ciz (kabuga dokunmaz)"
 	@echo
 	@echo "  make logs          GERCEK oturumun gnome-shell logu"
 	@echo "  make pack          dagitilabilir .zip uret"
@@ -32,10 +34,14 @@ help:
 schemas:
 	glib-compile-schemas $(SRC)/schemas/
 
+# assets/ bilerek src/ disinda duruyor: o bir VARLIK, kod degil (poz
+# atolyesinden dogrudan uzerine yaziliyor). Eklenti onu kendi dizininden
+# okudugu icin kurulumda iceri kopyalaniyor.
 install: schemas
 	rm -rf $(EXT_DIR)
 	mkdir -p $(EXT_DIR)
 	cp -r $(SRC)/. $(EXT_DIR)/
+	cp -r $(ASSETS) $(EXT_DIR)/
 	@echo "kuruldu: $(EXT_DIR)"
 	@echo "NOT: kurmak etkinlestirmek DEGIL. Test icin 'make nested'."
 
@@ -66,6 +72,12 @@ nested-clean:
 nested-log:
 	@tools/nested.sh --log
 
+# Sanat iterasyonunun tamami buradan: kabuk yeniden baslamiyor, saniyeler
+# yerine aninda aciliyor. Cizimi src/lib/sprite.js'ten aliyor, yani burada
+# gordugun kare kabugun cizdiginin aynisi.
+preview:
+	gjs -m tools/preview.js
+
 # Nested oturumun logu journalctl'e DEGIL dosyaya gidiyor; onun icin
 # `make nested-log`. Bu hedef gercek oturumun kabugunu izler.
 logs:
@@ -75,5 +87,11 @@ logs:
 
 pack: schemas
 	mkdir -p $(BUILD)
-	gnome-extensions pack $(SRC) --force --out-dir=$(BUILD)
+# `gnome-extensions pack` yalnizca BILDIGI dosyalari aliyor (metadata.json,
+# extension.js, prefs.js, stylesheet.css, schemas/, locale/). lib/ ve assets/
+# ACIKCA verilmezse pakete GIRMIYOR ve zip sessizce bozuk cikiyor --
+# kurulunca eklenti "Unknown module: ./lib/sprite.js" ile olur.
+	gnome-extensions pack $(SRC) --force --out-dir=$(BUILD) \
+	  --extra-source=$(CURDIR)/$(SRC)/lib \
+	  --extra-source=$(CURDIR)/$(ASSETS)
 	@echo "paket: $(BUILD)/$(UUID).shell-extension.zip"

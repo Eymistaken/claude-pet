@@ -1,9 +1,7 @@
-/* claude-pet — Faz 0 iskeleti
+/* claude-pet — maskot aktörü
  *
- * Bu fazda maskot yok: yerinde duran, sürüklenebilen, etrafı tıklama geçiren
- * düz bir dikdörtgen var. Faz 1'de bu St.Widget'in yerini kareleri Cairo ile
- * çizen bir St.DrawingArea alacak; konum, sürükleme ve sökme mantığı aynen
- * kalacak.
+ * Kareler `assets/animations.json` içinde; bu dosya onları yükleyip
+ * `St.DrawingArea` üzerine çizdiriyor ve aktörü sürüklenebilir tutuyor.
  *
  * Bu kod gnome-shell process'inin İÇİNDE çalışıyor: yakalanmamış bir exception
  * kullanıcının bütün masaüstünü düşürür. enable() gövdesi bu yüzden try/catch
@@ -11,18 +9,27 @@
  */
 
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {loadAnimations} from './lib/animations.js';
+import {drawFrame} from './lib/sprite.js';
+import {Player} from './lib/player.js';
+
 const LOG = '[claude-pet]';
 
-/** Geçici dikdörtgenin kenarı. Faz 1'de yerini kare boyutu alacak. */
-const PET_SIZE = 96;
+/** Bir hücrenin ölçeklenmemiş piksel kenarı. */
+const BASE_CELL = 3;
 
 /** İlk yerleşimde monitör kenarına bırakılan boşluk. */
 const MARGIN = 24;
+
+/* Faz 1'de durum makinesi yok: tek animasyon döngüde oynuyor.
+ * Faz 4'te `lib/states.js` bunu devralacak. */
+const GECICI_ANIMASYON = 'laptop_code';
 
 export default class ClaudePetExtension extends Extension {
     enable() {
@@ -34,24 +41,37 @@ export default class ClaudePetExtension extends Extension {
         this._grab = null;
         this._grabOffsetX = 0;
         this._grabOffsetY = 0;
+        this._player = null;
+        this._sheet = null;
+        this._cell = BASE_CELL;
 
         try {
             this._settings = this.getSettings();
 
-            this._pet = new St.Widget({
+            this._sheet = loadAnimations(
+                GLib.build_filenamev([this.path, 'assets', 'animations.json']));
+
+            // Ölçek bir kez okunuyor. Ölçek değişikliğini izlemek Faz 5'in işi.
+            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            this._cell = Math.max(1, Math.round(BASE_CELL * scale));
+
+            this._pet = new St.DrawingArea({
                 name: 'claude-pet',
                 reactive: true,
                 can_focus: false,
                 track_hover: false,
-                width: PET_SIZE,
-                height: PET_SIZE,
-                style: 'background-color: #D06A4B; border-radius: 12px;',
+                width: this._sheet.w * this._cell,
+                height: this._sheet.h * this._cell,
             });
 
-            // affectsInputRegion: true -> girdi bölgesi TAM OLARAK bu aktörün
-            // dikdörtgeni kadar; dışındaki her piksel tıklamayı alttaki
-            // pencereye geçirir. affectsStruts: false -> pencere yerleşimini
-            // bozmaz. trackFullscreen: false -> tam ekran pencerede de görünür.
+            this._connectPet('repaint', () => this._onRepaint());
+
+            // affectsInputRegion: true -> niyet belgesi. DİKKAT: Wayland'de bu
+            // seçenek bir şey YAPMIYOR (layout.js: `wantsInputRegion = … &&
+            // !Meta.is_wayland_compositor()`); tıklamayı aktörün kendisine
+            // getiren şey `reactive`. Süs parçaları Faz 2'de `reactive: false`
+            // ile eklenecek. affectsStruts: false -> pencere yerleşimini bozmaz.
+            // trackFullscreen: false -> tam ekran pencerede de görünür.
             Main.layoutManager.addChrome(this._pet, {
                 affectsStruts: false,
                 affectsInputRegion: true,
@@ -61,7 +81,12 @@ export default class ClaudePetExtension extends Extension {
             this._restorePosition();
             this._makeDraggable();
 
-            console.log(`${LOG} etkin · konum (${this._pet.x}, ${this._pet.y})`);
+            this._player = new Player(this._sheet.animations,
+                () => this._pet?.queue_repaint());
+            this._startAnimation();
+
+            console.log(`${LOG} etkin · konum (${this._pet.x}, ${this._pet.y}) · ` +
+                `hücre ${this._cell}px · ${Object.keys(this._sheet.animations).length} animasyon`);
         } catch (error) {
             console.error(`${LOG} enable: ${error}`);
             // Yarım kurulmuş bir eklenti bırakma: ne kurulduysa geri al.
@@ -71,6 +96,11 @@ export default class ClaudePetExtension extends Extension {
 
     disable() {
         try {
+            // Zamanlayıcı her şeyden önce dursun: aktör yok edildikten sonra
+            // uyanan bir kare geri çağrısı ölü bir aktöre uzanır.
+            this._player?.stop();
+            this._player = null;
+
             // Sürüklemenin ORTASINDA kapatılıyor olabiliriz: kilit ekranı
             // disable() çağırıyor. Bırakılmamış bir Clutter.Grab bütün girdiyi
             // kilitler — aktörü yok etmeden önce mutlaka bırak.
@@ -88,10 +118,37 @@ export default class ClaudePetExtension extends Extension {
                 this._pet = null;
             }
 
+            this._sheet = null;
             this._settings = null;
             console.log(`${LOG} kapatıldı`);
         } catch (error) {
             console.error(`${LOG} disable: ${error}`);
+        }
+    }
+
+    // ------------------------------------------------------------------ çizim
+
+    _onRepaint() {
+        const cr = this._pet.get_context();
+        try {
+            drawFrame(cr, this._player?.currentFrame(), this._sheet.colors, this._cell);
+        } catch (error) {
+            console.error(`${LOG} çizim: ${error}`);
+        } finally {
+            // GJS'de Cairo bağlamı elle bırakılmazsa sızıyor (klasik tuzak).
+            cr.$dispose();
+        }
+    }
+
+    _startAnimation() {
+        // Faz 1 geçici davranışı: tek klip döngüde. Varlık dosyasında
+        // `loop: false` yazıyor çünkü Faz 4'te üçe bölünecek; burada
+        // döngü bilerek zorlanıyor.
+        if (!this._player.play(GECICI_ANIMASYON, {loop: true})) {
+            // O animasyon yoksa (bozuk varlık) eldeki ilk animasyona düş.
+            const ilk = Object.keys(this._sheet.animations)[0];
+            if (ilk)
+                this._player.play(ilk, {loop: true});
         }
     }
 
@@ -105,8 +162,8 @@ export default class ClaudePetExtension extends Extension {
         if (x < 0 || y < 0) {
             const monitor = Main.layoutManager.primaryMonitor;
             if (monitor) {
-                x = monitor.x + monitor.width - PET_SIZE - MARGIN;
-                y = monitor.y + monitor.height - PET_SIZE - MARGIN;
+                x = monitor.x + monitor.width - this._pet.width - MARGIN;
+                y = monitor.y + monitor.height - this._pet.height - MARGIN;
             } else {
                 // Monitör tablosu henüz hazır değilse ekranın dışına düşmektense
                 // sol üste yakın dur; ilk sürüklemede zaten düzelir.
@@ -130,29 +187,28 @@ export default class ClaudePetExtension extends Extension {
         if (!monitors?.length)
             return [Math.round(x), Math.round(y)];
 
-        const centerX = x + PET_SIZE / 2;
-        const centerY = y + PET_SIZE / 2;
+        const w = this._pet.width;
+        const h = this._pet.height;
+        const centerX = x + w / 2;
+        const centerY = y + h / 2;
 
         const monitor = monitors.find(m =>
             centerX >= m.x && centerX < m.x + m.width &&
             centerY >= m.y && centerY < m.y + m.height)
             ?? Main.layoutManager.primaryMonitor ?? monitors[0];
 
-        const maxX = monitor.x + monitor.width - PET_SIZE;
-        const maxY = monitor.y + monitor.height - PET_SIZE;
-
         return [
-            Math.round(Math.max(monitor.x, Math.min(x, maxX))),
-            Math.round(Math.max(monitor.y, Math.min(y, maxY))),
+            Math.round(Math.max(monitor.x, Math.min(x, monitor.x + monitor.width - w))),
+            Math.round(Math.max(monitor.y, Math.min(y, monitor.y + monitor.height - h))),
         ];
     }
 
     // -------------------------------------------------------------- sürükleme
     //
     // `Clutter.DragAction` GNOME 46'nın Clutter çatalında YOK (ölçüldü: typelib
-    // Clutter-14'te tanımsız; ClickAction/PanAction duruyor, DragAction düşmüş).
-    // Kabuğun kendi yolu `global.stage.grab()` + el ile olay takibi —
-    // `ui/screenshot.js` ve `ui/slider.js` bunu böyle yapıyor.
+    // Clutter-14'te tanımsız). Kabuğun kendi yolu kullanılıyor:
+    // `global.stage.grab()` + el ile olay takibi — `ui/screenshot.js` ve
+    // `ui/slider.js` bunu böyle yapıyor.
 
     _makeDraggable() {
         this._connectPet('button-press-event', (_actor, event) => this._onPress(event));

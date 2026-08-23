@@ -20,8 +20,19 @@ UUID="claude-pet@eymistaken.local"
 BURASI="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EKLENTI_DIZIN="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/$UUID"
 
-LOG="${CLAUDE_PET_NESTED_LOG:-${TMPDIR:-/tmp}/claude-pet-nested.log}"
-PIDF="$LOG.pid"
+# Log KOSUMA OZEL, sabit tek dosya DEGIL.
+#
+# NEDEN: onceki kosumdan kalan servisler log dosyasini hala ACIK tutuyor ve
+# kendi dosya konumlarindan yazmaya devam ediyor. Sabit bir dosyayi `>` ile
+# kisaltinca yeni kabugun satirlarini o eski yazicilar UZERINE yaziyor --
+# yani kanit sessizce yok oluyor. Bir kere yasandi: `[claude-pet] etkin`
+# satiri logdan kayboldu ve kabuk cokmus gibi gorundu.
+LOG_DIR="${CLAUDE_PET_NESTED_LOG_DIR:-${TMPDIR:-/tmp}/claude-pet-nested}"
+mkdir -p "$LOG_DIR"
+# Sabit ad, son kosuma isaret eden bir symlink olarak duruyor.
+LOG_LINK="${TMPDIR:-/tmp}/claude-pet-nested.log"
+PIDF="$LOG_LINK.pid"
+BUSF="$LOG_LINK.bus"
 
 # Nested kabugun Wayland soketi. SABIT ad: test istemcisini
 # `WAYLAND_DISPLAY=claude-pet-nested <uygulama>` ile acabilmek icin.
@@ -87,6 +98,46 @@ oturum_temizle() {
     return 0
 }
 
+# Yetim BUS DAEMON'lari topla.
+#
+# `oturum_temizle` bunlari kaciriyor, cunki dbus-daemon'in KENDI
+# DBUS_SESSION_BUS_ADDRESS'i ebeveynden miras kaldigi icin GERCEK oturumu
+# gosteriyor (`/run/user/1000/bus`), `/tmp/dbus-*` degil. Sonuc: her
+# `make nested` bir bus daemon birakiyor ve bunlar inotify ornegi yiyor.
+#
+# GUVENLIK: yalnizca UZERINDE CANLI nested kabuk OLMAYAN bus'lar oldurulur.
+# Yani baska bir nested oturum (ornegin Pcbridge'inki) acikken ona dokunmaz.
+bus_temizle() {
+    command -v ss >/dev/null || return 0
+
+    # Canli nested kabuklarin kullandigi soket yollari.
+    local canli="" p adr
+    for p in $(pgrep -f -- '^gnome-shell --nested' 2>/dev/null || true); do
+        adr=$(grep -azm1 '^DBUS_SESSION_BUS_ADDRESS=' "/proc/$p/environ" 2>/dev/null | tr -d '\0' || true)
+        case "$adr" in
+            *unix:path=/tmp/dbus-*)
+                canli="$canli ${adr#*unix:path=}"
+                ;;
+        esac
+    done
+    canli=$(echo "$canli" | tr ' ' '\n' | cut -d, -f1 | grep -v '^$' || true)
+
+    local vurulan="" yol pid satir
+    while read -r satir; do
+        yol=$(echo "$satir" | grep -o '/tmp/dbus-[A-Za-z0-9]*' | head -1)
+        pid=$(echo "$satir" | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
+        [[ -z "$yol" || -z "$pid" ]] && continue
+        if ! echo "$canli" | grep -qx "$yol"; then
+            vurulan="$vurulan $pid"
+        fi
+    done < <(ss -lxp 2>/dev/null | grep '/tmp/dbus-' || true)
+
+    [[ -z "${vurulan// }" ]] && return 0
+    echo "sahipsiz $(echo $vurulan | wc -w) bus daemon kapatiliyor"
+    kill -TERM $vurulan 2>/dev/null || true
+    return 0
+}
+
 inotify_durum() {
     echo "inotify ornegi: $(ls -l /proc/*/fd/* 2>/dev/null | grep -c inotify)/$(cat /proc/sys/fs/inotify/max_user_instances)"
 }
@@ -115,6 +166,7 @@ oldur() {
     # Kabuk olsun olmasin: yetim servisler her zaman toplanir. Bir onceki
     # kosumdan kalmis olabilirler.
     oturum_temizle
+    bus_temizle
 }
 
 # Izole veritabanini nested oturum icin hazirla.
@@ -125,7 +177,18 @@ dconf_hazirla() {
     local surum
     surum="$(gnome-shell --version 2>/dev/null | awk '{print $3}')"
 
-    gsettings set org.gnome.shell enabled-extensions "['$UUID']"
+    # `disabled-extensions` ONCE temizlenmeli. `gnome-extensions disable`
+    # UUID'yi O LISTEYE yaziyor ve o liste `enabled-extensions`'i EZIYOR:
+    # kabuk, disabled'da gordugu bir UUID'yi enabled listesinden aninda geri
+    # siliyor. Belirtisi kafa karistirici -- "Durum: INITIALIZED", log sessiz,
+    # `enabled-extensions` yazdiktan saniyeler sonra `@as []` olmus oluyor.
+    # `dconf reset` kullaniliyor, `gsettings set` degil: bu iki listenin
+    # sahibi CALISAN KABUK ve o ayaktayken disaridan yapilan yazmalari geri
+    # aliyor (olculdu: `gsettings set` 0 donuyor, deger degismiyor). Burada
+    # kabuk kapali oldugu icin ikisi de calisir, ama reset niyeti daha net:
+    # "bu anahtari hic yazilmamis say".
+    dconf reset /org/gnome/shell/disabled-extensions
+    dconf write /org/gnome/shell/enabled-extensions "['$UUID']"
     # Karsilama penceresi bos bir veritabaninda her acilista cikar ve
     # dikdortgenin onunu kapatir.
     gsettings set org.gnome.shell welcome-dialog-last-shown-version "${surum:-99.0}"
@@ -144,11 +207,22 @@ case "${1:-}" in
         ;;
     --temizle)
         oturum_temizle
+        bus_temizle
         inotify_durum
         exit 0
         ;;
     --log)
-        exec tail -f "$LOG"
+        exec tail -f "$LOG_LINK"
+        ;;
+    --bus)
+        # Calisan nested kabugun oturum veriyolu adresi.
+        # KULLAN: export DBUS_SESSION_BUS_ADDRESS="$(tools/nested.sh --bus)"
+        # Kabuk her yeniden baslatildiginda BU ADRES DEGISIYOR; eski adrese
+        # gonderilen `gnome-extensions` komutlari sessizce olu bir veriyoluna
+        # gidiyor ve hicbir sey yapmiyor.
+        [[ -f "$BUSF" ]] || { echo "nested kabuk calismiyor" >&2; exit 1; }
+        cat "$BUSF"
+        exit 0
         ;;
     -h|--yardim|--help)
         cat <<EOF
@@ -158,8 +232,9 @@ Kullanim: nested.sh [secenek]
   --oldur       kabugu VE ardinda kalan oturum servislerini kapat
   --temizle     yalnizca yetim servisleri topla (kabuga dokunmaz)
   --log         calisan kabugun logunu izle
+  --bus         calisan kabugun D-Bus adresini yazdir
 
-Log dosyasi   : $LOG
+Log dizini    : $LOG_DIR  (son kosum: $LOG_LINK)
 Wayland soketi: $WL_DISPLAY
 dconf         : IZOLE (~/.config/dconf/$DCONF_DB)
 
@@ -190,7 +265,10 @@ esac
 oldur
 dconf_hazirla
 
+LOG="$LOG_DIR/$(date +%Y%m%d-%H%M%S).log"
 : > "$LOG"
+ln -sfn "$LOG" "$LOG_LINK"
+rm -f "$BUSF"
 dbus-run-session -- gnome-shell --nested --wayland --wayland-display="$WL_DISPLAY" >"$LOG" 2>&1 &
 echo "$!" > "$PIDF"
 echo "nested kabuk basladi (pid $!) · monitor: $MUTTER_DEBUG_DUMMY_MODE_SPECS x$MUTTER_DEBUG_NUM_DUMMY_MONITORS"
@@ -204,8 +282,45 @@ for _ in $(seq 1 20); do
 done
 sleep 3
 
+# Bus adresini kaydet ki `--bus` ile sorulabilsin.
+SHELL_PID="$(pgrep -f -- '^gnome-shell --nested' | tail -1 || true)"
+if [[ -n "$SHELL_PID" ]]; then
+    grep -azm1 '^DBUS_SESSION_BUS_ADDRESS=' "/proc/$SHELL_PID/environ" 2>/dev/null \
+        | tr -d '\0' | cut -d= -f2- > "$BUSF" || true
+fi
+
+# Eklenti GERCEKTEN etkin mi?
+#
+# NEDEN GEREKLI: `enabled-extensions`'i yazmak yetmiyor. Kabuk bu listenin
+# sahibi; `disabled-extensions`'ta duran bir UUID'yi enabled listesinden
+# aninda geri siliyor ve bunu SESSIZCE yapiyor. Belirtisi cok kafa
+# karistirici: log tertemiz, hicbir hata yok, ama pet ekranda yok.
+# Bu yuzden durum sorulup gerekirse kabugun KENDI D-Bus yoluyla duzeltiliyor.
+eklenti_dogrula() {
+    local durum
+    durum=$(DBUS_SESSION_BUS_ADDRESS="$(cat "$BUSF" 2>/dev/null)" \
+        gnome-extensions info "$UUID" 2>/dev/null | grep -oP '(?<=Durum: ).*' || true)
+    echo "${durum:-BILINMIYOR}"
+}
+
+if [[ -s "$BUSF" ]]; then
+    durum="$(eklenti_dogrula)"
+    if [[ "$durum" != "ACTIVE" ]]; then
+        echo "eklenti etkin degil (durum: $durum) — kabuga soruluyor"
+        DBUS_SESSION_BUS_ADDRESS="$(cat "$BUSF")" \
+            gnome-extensions enable "$UUID" 2>/dev/null || true
+        sleep 2
+        durum="$(eklenti_dogrula)"
+    fi
+    echo "eklenti durumu: $durum"
+    [[ "$durum" == "ACTIVE" ]] || echo "UYARI: eklenti ETKIN DEGIL — log bos olabilir ama pet ekranda olmayacak"
+fi
+
 echo
 echo "--- eklenti satirlari ---"
 grep -E 'claude-pet' "$LOG" || echo "(henuz cikti yok)"
 echo
-echo "Test penceresi: WAYLAND_DISPLAY=$WL_DISPLAY gnome-calculator &"
+echo "Test penceresi:"
+echo "    WAYLAND_DISPLAY=$WL_DISPLAY DBUS_SESSION_BUS_ADDRESS=\"\$($0 --bus)\" gnome-calculator &"
+echo "Eklentiyi bu oturumda yonetmek icin:"
+echo "    export DCONF_PROFILE=$PROFIL DBUS_SESSION_BUS_ADDRESS=\"\$($0 --bus)\""

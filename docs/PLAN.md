@@ -164,3 +164,25 @@ Faz sırasında görülen ama o fazın kapsamına girmediği için yapılmayan i
 - **Test kurgusu notu.** pcbridge ile sürükleme denerken `hold` doğrudan
   çağrılırsa imleç hedefe varmadan basılıyor ve basma ESKİ konuma düşüyor.
   Önce `move`, sonra `hold`.
+
+### Faz 1'den
+
+- **Kabuk `enabled-extensions`/`disabled-extensions`'ın sahibi.** Kabuk
+  ayaktayken bu iki anahtarı dconf'tan yazmak sessizce geri alınıyor. Eklentiyi
+  açıp kapatmanın tek güvenilir yolu kabuğun D-Bus'ı. `tools/nested.sh` bunu
+  açılış sonrası doğrulayıp gerekirse kendisi düzeltiyor.
+- **İzole dconf'a tek yazıcı değmeli.** Nested kabuk açıkken host tarafından
+  `gsettings` yazmak nested'in yazdıklarını eziyor. Test komutlarında hep
+  `DBUS_SESSION_BUS_ADDRESS="$(tools/nested.sh --bus)"` kullan.
+- **Bozuk varlıkta pet görünmez oluyor.** `animations.js` boş varsayılana
+  düşüp `console.warn` basıyor; ekranda hiçbir şey yok. Faz 5'te görünür bir
+  "varlık bozuk" göstergesi (tek renk kare, farklı renk) düşünülebilir.
+- **`sprite.js` bilerek kabuktan bağımsız.** Yeni çizim kodu eklerken bu
+  ayrımı bozma: `St`, `Main`, `global` o dosyaya girmemeli, yoksa
+  `make preview` çalışmaz hâle gelir ve sanat iterasyonu `make nested`'e
+  düşer (çok daha yavaş).
+- **GJS Cairo'da `ImageSurface.create` yok**, `new Cairo.ImageSurface(...)`
+  var. PNG'ye çizen bir araç yazarken (kontak sayfası, poz atölyesi) gerekli.
+- **Ölçek tek yerden.** `BASE_CELL × scale_factor` yalnızca `extension.js`'te
+  hesaplanıyor ve `sprite.js`'e parametre olarak giriyor. Faz 5'te
+  `scale` ayarı eklenince de bu tek nokta değişsin.
