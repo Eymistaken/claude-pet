@@ -15,13 +15,19 @@ atlama.
 
 ## Nasıl kullanılır
 
+En kısa yol — sıradaki fazı kendi bulur:
+
 ```sh
 cd <proje kökü>
 claude
 ```
+```
+UYGULA.md dosyasını uygula
+```
 
-Sonra ilgili faz dosyasının içeriğini yapıştır. `CLAUDE.md` zaten otomatik
-yükleniyor, o yüzden prompt dosyaları kuralları tekrar etmiyor.
+Belirli bir fazı elle vermek istersen o dosyanın içeriğini yapıştır.
+`CLAUDE.md` zaten otomatik yükleniyor, o yüzden prompt dosyaları kuralları
+tekrar etmiyor.
 
 ## Faz bitince
 

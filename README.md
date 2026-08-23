@@ -86,6 +86,15 @@ make preview     # kareleri shell'e hiç dokunmadan çiz
 Yol haritası `docs/PLAN.md`'de, faz faz. Her fazın Claude Code'a verilecek
 hazır komutu `prompts/` altında.
 
+Çalışmaya başlamak için Claude Code'a tek cümle yeter:
+
+```
+UYGULA.md dosyasını uygula
+```
+
+Nerede kalındığını `docs/ILERLEME.md`'den okur, sıradaki fazı uygular, biter
+ve durur.
+
 ## Lisans ve karakter hakkında
 
 Kod MIT ile lisanslı.
