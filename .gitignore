@@ -1,0 +1,24 @@
+# derlenmis sema
+src/schemas/gschemas.compiled
+
+# paketleme ciktisi
+*.shell-extension.zip
+build/
+
+# ekran kayitlari ve gecici cikarma ciktilari
+*.mp4
+*.webm
+*.mkv
+video_kaydı/
+/tmp_*.json
+kontrol*.png
+!docs/kontrol_laptop_code.png
+
+# python
+__pycache__/
+*.pyc
+
+# editor
+.vscode/
+.idea/
+*.swp
