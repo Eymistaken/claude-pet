@@ -71,9 +71,14 @@ dokunmadan kareleri bağımsız bir pencerede gösteren araç.
 ### Faz 2 — Katman ayrımı ve input bölgesi
 
 Kare iki katmana ayrılır: karakter (`#`, `o`) ve laptop (`L`). İkisi ayrı
-actor olur; karakter input alır, laptop `affectsInputRegion: false` ile
-almaz. Her actor kendi içeriğinin sıkı kutusuna oturur, böylece tıklama
-yutulan alan karakterin kendisiyle sınırlı kalır.
+actor olur; karakter input alır, laptop `reactive: false` ile almaz.
+
+Actor boyutu **animasyon boyunca sabit**: o animasyonun bütün karelerindeki
+katman kutularının birleşimi, laptop için ayrı bir birleşim. Kare başına
+boyutlandırma bilerek yapılmıyor — bir chrome actor'ün her allocation
+değişikliği kompozitöre input bölgesini yeniden hesaplatıyor ve karakterin
+sıkı kutusu zaten neredeyse her karede değişiyor. Her kare kendi içeriğini
+bu sabit tuvalin içinde doğru ofsetle çiziyor.
 
 ### Faz 3 — Hook'lar ve durum
 
@@ -186,3 +191,32 @@ Faz sırasında görülen ama o fazın kapsamına girmediği için yapılmayan i
 - **Ölçek tek yerden.** `BASE_CELL × scale_factor` yalnızca `extension.js`'te
   hesaplanıyor ve `sprite.js`'e parametre olarak giriyor. Faz 5'te
   `scale` ayarı eklenince de bu tek nokta değişsin.
+
+### Faz 2'den
+
+- **`notify::allocation` her chrome actor'ünde `_queueUpdateRegions` tetikliyor.**
+  `layout.js::_trackActor` (46.0) `notify::visible` ve `notify::allocation`
+  sinyallerini `affectsInputRegion` ne olursa olsun bağlıyor. Yani bir chrome
+  actor'ünü kare başına boyutlandırmak/taşımak, `affectsInputRegion: false`
+  olsa bile her karede bir `BEFORE_REDRAW` later kuruyor. Wayland'de o later
+  bizim actor'lerimizi atlıyor (`wantsInputRegion` false), ama X11'de doğrudan
+  `set_stage_input_region` demek. Sabit tuval bu yüzden yalnızca titreme değil,
+  taşınabilirlik meselesi.
+- **Zamansal titreme hâlâ ölçülmedi.** Kare zamanlaması `GLib.timeout_add`
+  (`PRIORITY_DEFAULT`) ile uyanıp `queue_repaint` çağırıyor; uyanışın
+  kompozitörün kare saatine göre nereye düştüğü kontrol edilmiyor. 15 fps
+  (66.7 ms) 60 Hz'in (16.67 ms) tam katı olduğu için teoride bölünme temiz,
+  ama nested'de çıkış llvmpipe ile yazılım render ediliyor ve 60 Hz garanti
+  değil. Görünür bir judder kalırsa doğru çözüm zamanlayıcıyı bırakıp
+  `Clutter.frame-clock` / `laters` üzerinden sürmek.
+- **Ekran görüntüsüyle ölçüm için renk toleransı gerekiyor.** Gerçek oturumun
+  yakalamasında `#D87656` → `#d87858` çıkıyor (nested'de birebir). Piksel
+  karşılaştıran bir test yazılırsa tolerans şart.
+- **Katman eklemek tek satır.** `sprite.js::KATMANLAR`'a yeni bir karakter,
+  `extension.js::KATMAN_AYARI`'na `reactive`/`affectsInputRegion` satırı; kutu,
+  birleşim, gizleme ve konumlandırma kendiliğinden geliyor. Gölge ya da
+  düşünce baloncuğu böyle eklenmeli — asla karakter actor'üne çizilerek değil,
+  yoksa tıklama yutulan alan büyür.
+- **Sürükleme eşiği (Faz 0'dan devam).** Karakterin üstüne tek tıklamak hâlâ
+  "sürükleme bitti" sayılıp konumu yeniden yazıyor; Faz 2 doğrulamasında bu
+  bir kez logda göründü. Zararsız ama Faz 5'te birkaç piksellik eşik.

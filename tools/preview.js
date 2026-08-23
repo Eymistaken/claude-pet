@@ -9,6 +9,12 @@
  * doğrudan içeri alınıyor. Yani burada gördüğün kare ve ritim, kabuğun
  * çizdiğinin aynısı — iki ayrı çizim yolu tutmak zorunda değiliz.
  *
+ * "Kutular" düğmesi (Faz 2) actor sınırlarını gösteriyor: yeşil karakter
+ * katmanının, mavi laptop katmanının BİRLEŞİM kutusu — yani kabuktaki iki
+ * actor'ün tam olarak kapladığı alan. Yeşil kutunun dışı tıklama yutmayan
+ * bölge. Kesikli kutu o karenin sıkı kutusu; birleşimin neden ondan büyük
+ * olduğu böyle görülüyor.
+ *
  * Kullanım:  gjs -m tools/preview.js     (ya da `make preview`)
  */
 
@@ -16,13 +22,19 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
 
 import {loadAnimations} from '../src/lib/animations.js';
-import {drawFrame, stripCount} from '../src/lib/sprite.js';
+import {KATMANLAR, drawLayer, frameStripCount} from '../src/lib/sprite.js';
 import {Player} from '../src/lib/player.js';
 
 /** Büyük oynatma alanının hücre boyutu. */
 const OYNAT_HUCRE = 5;
 /** Izgaradaki küçük karelerin hücre boyutu. */
 const IZGARA_HUCRE = 2;
+
+/** Katman kutularının rengi. */
+const KUTU_RENK = {
+    karakter: [0.15, 0.85, 0.35],
+    laptop: [0.25, 0.55, 1.0],
+};
 
 /** Bu betiğin bulunduğu dizin — varlık yolunu ondan türetiyoruz. */
 function buradaki() {
@@ -38,16 +50,44 @@ if (!A.ok)
     printerr(`UYARI: ${VARLIK} okunamadı, boş varsayılan gösteriliyor`);
 
 const adlar = Object.keys(A.animations);
+const katmanAdlari = Object.keys(KATMANLAR);
+
+/** Bir kareyi bütün katmanlarıyla, tam tuval koordinatlarında çizer. */
+function kareCiz(cr, kare, hucre) {
+    for (const ad of katmanAdlari)
+        drawLayer(cr, kare?.[ad], A.colors, hucre, null);
+}
+
+function kutuCiz(cr, box, hucre, renk, kesikli) {
+    if (!box)
+        return;
+    cr.setSourceRGB(renk[0], renk[1], renk[2]);
+    cr.setLineWidth(1);
+    cr.setDash(kesikli ? [3, 3] : [], 0);
+    // Yarım piksel kaydırma: 1 px'lik çizgi bulanıklaşmasın.
+    cr.rectangle(box.x * hucre + 0.5, box.y * hucre + 0.5,
+        box.w * hucre - 1, box.h * hucre - 1);
+    cr.stroke();
+}
 
 /** Verilen kareyi çizen bir DrawingArea üretir. */
-function kareAlani(kareGetir, hucre) {
+function kareAlani(kareGetir, hucre, kutuGetir = null) {
     const alan = new Gtk.DrawingArea({
         content_width: A.w * hucre,
         content_height: A.h * hucre,
     });
     alan.set_draw_func((_alan, cr) => {
         try {
-            drawFrame(cr, kareGetir(), A.colors, hucre);
+            const kare = kareGetir();
+            kareCiz(cr, kare, hucre);
+
+            const kutular = kutuGetir?.();
+            if (kutular) {
+                for (const ad of katmanAdlari) {
+                    kutuCiz(cr, kutular[ad], hucre, KUTU_RENK[ad], false);
+                    kutuCiz(cr, kare?.[ad]?.box, hucre, KUTU_RENK[ad], true);
+                }
+            }
         } finally {
             // GJS'de Cairo bağlamı elle bırakılmazsa sızıyor.
             cr.$dispose();
@@ -71,22 +111,30 @@ function pencereKur(app) {
     });
     win.set_child(kok);
 
-    // ---- üst çubuk: animasyon seçimi ve oynat/duraklat
+    // ---- üst çubuk: animasyon seçimi, oynat/duraklat, kutular
     const ustCubuk = new Gtk.Box({orientation: Gtk.Orientation.HORIZONTAL, spacing: 8});
     const secici = Gtk.DropDown.new_from_strings(adlar);
     const oynatDugme = new Gtk.ToggleButton({label: 'Duraklat', active: true});
+    const kutuDugme = new Gtk.ToggleButton({label: 'Kutular', active: false});
     const bilgi = new Gtk.Label({xalign: 0, hexpand: true});
     ustCubuk.append(secici);
     ustCubuk.append(oynatDugme);
+    ustCubuk.append(kutuDugme);
     ustCubuk.append(bilgi);
     kok.append(ustCubuk);
+
+    /** O an seçili animasyon. */
+    const secili = () => A.animations[adlar[secici.selected]];
 
     // ---- büyük oynatma alanı
     const player = new Player(A.animations, () => {
         oynatAlani.queue_draw();
         bilgiYaz();
     });
-    const oynatAlani = kareAlani(() => player.currentFrame(), OYNAT_HUCRE);
+    const oynatAlani = kareAlani(
+        () => player.currentFrame(),
+        OYNAT_HUCRE,
+        () => (kutuDugme.active ? secili()?.boxes : null));
     oynatAlani.set_halign(Gtk.Align.CENTER);
     kok.append(oynatAlani);
 
@@ -104,15 +152,22 @@ function pencereKur(app) {
     kaydirma.set_child(izgara);
     kok.append(kaydirma);
 
+    function kutuYazisi(a) {
+        return katmanAdlari.map(ad => {
+            const b = a.boxes[ad];
+            return b ? `${ad} ${b.w}×${b.h}` : `${ad} yok`;
+        }).join(' · ');
+    }
+
     function bilgiYaz() {
-        const a = A.animations[adlar[secici.selected]];
+        const a = secili();
         if (!a)
             return;
         bilgi.label =
             `${a.name} · kare ${player.frameIndex + 1}/${a.frames.length} · ` +
             `hold ${a.holds[player.frameIndex]} · ${a.fps} fps · ` +
             `${(a.durationMs / 1000).toFixed(2)} sn · ` +
-            `${stripCount(player.currentFrame())} şerit`;
+            `${frameStripCount(player.currentFrame())} şerit · ${kutuYazisi(a)}`;
     }
 
     function izgarayiKur() {
@@ -120,7 +175,7 @@ function pencereKur(app) {
         while ((cocuk = izgara.get_first_child()) !== null)
             izgara.remove(cocuk);
 
-        const a = A.animations[adlar[secici.selected]];
+        const a = secili();
         if (!a)
             return;
 
@@ -153,6 +208,7 @@ function pencereKur(app) {
     }
 
     secici.connect('notify::selected', animasyonDegisti);
+    kutuDugme.connect('toggled', () => oynatAlani.queue_draw());
     oynatDugme.connect('toggled', () => {
         if (oynatDugme.active) {
             oynatDugme.label = 'Duraklat';

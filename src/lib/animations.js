@@ -2,6 +2,8 @@
  *
  * Kareler kod değil varlıktır: bu dosya onları okur, doğrular ve şeritlere
  * derler. Derleme bir kez, yükleme anında yapılıyor — her repaint'te değil.
+ * Her kare KATMANLARA ayrılmış hâlde saklanıyor ve her animasyon, katman
+ * başına bir birleşim kutusu taşıyor (actor boyutları oradan geliyor).
  *
  * BOZUK VERİ PET'İ SUSTURUR, SHELL'İ DEĞİL. JSON okuması ve ayrıştırması
  * try/catch içinde; hata hâlinde boş bir varsayılanla devam edilir ve
@@ -10,13 +12,22 @@
 
 import GLib from 'gi://GLib';
 
-import {compileFrame, parsePalette} from './sprite.js';
+import {KATMANLAR, compileFrame, parsePalette, unionBox} from './sprite.js';
 
 const LOG = '[claude-pet]';
 
 /** Hiçbir şey çizmeyen, ama pet'i ayakta tutan yedek. */
 function bosVarsayilan(neden) {
     console.warn(`${LOG} animasyonlar yüklenemedi (${neden}); boş varsayılana düşülüyor`);
+    // Kare ve kutu biçimi gerçek veriyle AYNI olmalı: çizim ve
+    // boyutlandırma yolu burada da özel bir dal istemesin.
+    const bosKare = {};
+    const bosKutular = {};
+    for (const ad of Object.keys(KATMANLAR)) {
+        bosKare[ad] = {strips: {}, box: null};
+        bosKutular[ad] = null;
+    }
+
     return {
         w: 16,
         h: 16,
@@ -27,7 +38,9 @@ function bosVarsayilan(neden) {
                 fps: 1,
                 loop: false,
                 holds: [1],
-                frames: [{}],
+                frames: [bosKare],
+                boxes: bosKutular,
+                durationMs: 0,
             },
         },
         ok: false,
@@ -65,12 +78,20 @@ function derle(ham, w, h) {
 
     const fps = Number.isFinite(ham.fps) && ham.fps > 0 ? ham.fps : 15;
 
+    // Katman başına BİRLEŞİM kutusu: bu animasyonun bütün karelerini içine
+    // alan tek dikdörtgen. Actor boyutu bu — kare başına değil animasyon
+    // başına değişiyor (gerekçe: `extension.js::_syncSize`).
+    const boxes = {};
+    for (const ad of Object.keys(KATMANLAR))
+        boxes[ad] = unionBox(frames.map(kare => kare[ad].box));
+
     return {
         name,
         fps,
         loop: ham.loop === true,
         holds,
         frames,
+        boxes,
         // Toplam süre: rapor ve önizleyici için.
         durationMs: Math.round(holds.reduce((a, b) => a + b, 0) * 1000 / fps),
     };

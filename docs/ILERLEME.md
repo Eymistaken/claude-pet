@@ -191,4 +191,110 @@ Notlar / bilinen eksikler
   Faz 4'te üçe bölününce bu zorlama kalkacak.
 - Ölçek açılışta bir kez okunuyor; `scale_factor` değişimini izlemek Faz 5.
 
-<!-- Sıradaki: Faz 2 — prompts/faz-2-katman-ve-input.md -->
+## Faz 2 — Katman ayrımı ve input bölgesi            2026-08-23
+
+Yapılanlar
+- `src/lib/sprite.js` — kare artık **katman katman** derleniyor.
+  `KATMANLAR = {karakter: ['#','o'], laptop: ['L']}`; `compileLayer(rows, chars)`
+  o katmanın şeritlerini **ve sıkı sınırlayıcı kutusunu** (hücre cinsinden,
+  boşsa `null`) döndürüyor. `unionBox()` ile kutular birleştiriliyor,
+  `drawLayer(cr, layer, colors, cell, origin)` tuval ofsetiyle çiziyor.
+- `src/lib/animations.js` — her animasyon katman başına bir **birleşim kutusu**
+  (`anim.boxes.karakter`, `anim.boxes.laptop`) taşıyor. Bozuk varlıkta da aynı
+  biçim üretiliyor, çizim yolunda özel dal yok.
+- `src/extension.js` — iki `St.DrawingArea`:
+
+  | Actor | reactive | affectsInputRegion | Çizdiği |
+  |---|---|---|---|
+  | `claude-pet-laptop` | `false` | `false` | `L` |
+  | `claude-pet-karakter` | `true` | `true` | `#`, `o` |
+
+  Sahneye laptop önce ekleniyor (altta kalsın). Konumun tek kaynağı
+  `_originX/_originY` — sprite ızgarasının (0,0) hücresinin sahnedeki yeri;
+  her actor kendi kutusunun ofsetiyle oradan türüyor. Birlikte hareket
+  etmeleri bu yüzden ayrı bir iş değil. GSettings'e yazılan da bu, yani
+  Faz 1'in kaydettiği değerler aynı anlamda geçerli kalıyor.
+- `tools/preview.js` — yeni API'ye taşındı, **"Kutular" anahtarı** eklendi:
+  düz çizgi birleşim kutusu, kesikli çizgi o karenin sıkı kutusu (yeşil
+  karakter, mavi laptop). Kutuların doğruluğunu kabuğa hiç dokunmadan
+  görmenin en hızlı yolu.
+
+Ölçümler
+- **Kutu neden animasyon boyunca sabit:** karakterin sıkı kutusu
+  `laptop_code`'un 35 karesinde **7 ayrı değer**, `duruslar_9`'un 9 karesinde
+  **5 ayrı değer** alıyor. Yani "kutu değişmediyse `set_size` çağırma"
+  koruması işe yaramazdı — kutu neredeyse her karede değişiyor.
+- **Birleşimin bedeli:** karakter katmanında sıkı kutuya göre şişme
+  `laptop_code` 1.62× · `duruslar_9` 1.46× · `idle` 1.00×. Kazanç yine de
+  büyük: karakter actor'ü tam tuvalin **%47 / %55 / %33**'ü.
+- **Boyutlandırma gerçekten animasyon başına:** nested'de 5 dk 36 sn koşum
+  sonunda `kapatıldı · 1853 kare · 1 kez boyutlandı · 107 kez katman
+  gizlendi/gösterildi`. Gerçek oturumda `1698 kare · 1 kez boyutlandı ·
+  98 kez`. Kare sayısı bine çıkarken boyutlandırma **1**'de kalıyor.
+- **Gizleme/gösterme sayısı tesadüf değil:** `laptop_code`'da laptop koşuları
+  `YOK 0-4 · VAR 5-31 · YOK 32-34`, yani döngü başına 2 geçiş.
+  1853/35 = 52.9 döngü → beklenen 106 + 1 açılış = **107**; ölçülen 107.
+  Gerçek oturumda 1698/35 = 48.5 → beklenen 97 + 1 = **98**; ölçülen 98.
+- Modül testi 18/18: katmanlar birbirine sızmıyor (45 karede 0), sıkı kutular
+  ham JSON'dan bağımsız hesapla birebir (90 kutu), birleşim bütün kareleri
+  kapsıyor ve her kenarına en az bir kare değiyor, çizim ofseti tuvale
+  taşmıyor ve kapladığı hücreler ham veriyle birebir (5 kare × katman).
+
+Doğrulama
+- [x] Laptop görünürken karakterin solundaki boşluğa tıklayınca altındaki
+      pencere tıklanıyor  → nested'de hesap makinesi maskotun altına alındı.
+      **(a)** Laptobun ÇİZİLİ pikselinin üstüne tıklandı → "4" bastı.
+      **(b)** Karakterin üstüne tıklandı → ekran "4"te kaldı, tıklama yutuldu
+      (logda `konum kaydedildi` satırı: olayı pet aldı).
+      **(c)** Laptop actor'ünün şeffaf kısmına tıklandı → "7" bastı.
+      **(d)** Faz 1'de tam tuvalin yuttuğu, karakterin SAĞINDAKİ şeride
+      tıklandı → "9" bastı. Sonuç ekranda **479**.
+- [x] Karakteri sürükleyince ikisi birlikte hareket ediyor  → sürükleme
+      öncesi/sonrası piksel ölçümü: gövde (1427,852)→(792,687), laptop
+      (1400,885)→(765,720). İki katmanın kayması da **birebir (−635, −165)**,
+      ızgara farkının tam kendisi. Log: `konum kaydedildi (477, 509)` —
+      hesaplanan hedefle piksel piksel aynı.
+- [x] Animasyon boyunca karakter titremiyor, yerinden kaymıyor  → aşağıda
+      ayrı başlık.
+- [x] Laptop olmayan karelerde laptop actor'ü gizli ve input yutmuyor
+      → laptopsuz karelerde ekranda tek bir `#8B8B8B` piksel yok (ölçüldü,
+      `n=0`); gizleme/gösterme sayacı beklenen değeri birebir tutuyor (yukarı).
+      Wayland'de input bölgesi zaten hiç sorulmuyor (aşağıdaki not), o yüzden
+      laptobu zararsız kılan şey `reactive: false` — dört tıklama testinin
+      hepsi bunu doğruluyor. X11 tarafını kabuğun kendi kaynağı garanti
+      ediyor: `layout.js:1076` input dikdörtgenini eklemeden önce
+      `actor.get_paint_visibility()` soruyor.
+- [x] Devre dışı bırakınca iki actor de sökülüyor, kalıntı yok  → nested'de
+      1280×800'lük alanın TAMAMINDA maskot rengi `n=0`; gerçek oturumda sağ
+      alt köşede `n=0`. İki ortamda da logda claude-pet ile ilgili tek bir
+      uyarı/hata yok. Yeniden etkinleştirince aynı ızgara konumunda geliyor.
+
+Titreme raporu (prompt'un istediği iki ortam)
+- **Yöntem.** Her ekran görüntüsünde katmanların piksel sınırları ölçülüp,
+  varlıktaki kare kutularının `ızgara + kutu×hücre` ile hesaplanan ekran
+  karşılığıyla karşılaştırıldı. Kayma varsa bu eşleşme bozulur.
+- **(a) Nested:** 2 dakikaya yayılmış 4 bağımsız örnek. Dördü de **tek bir
+  sabit ofsette** varlıktaki karelere birebir oturdu — hem karakter hem
+  laptop, aynı anda. Alt piksel kayması yok, ızgara kayması yok.
+- **(b) Gerçek oturum:** eklenti gerçek kabukta etkinleştirildi
+  (`ızgara (3672, 954)` — birincil monitörün sağ altı, hesapla birebir),
+  3 örnek alındı, üçü de varlıktaki karelere birebir oturdu.
+- **Sonuç:** geometri kaynaklı titreme her iki ortamda da yok; actor'ler
+  animasyon boyunca ne boyutlanıyor ne yer değiştiriyor (ölçüm: 1853 karede
+  1 boyutlandırma). Geriye kalan tek olası kaynak **zamansal** olurdu —
+  `GLib.timeout` ile uyanan `queue_repaint`'in kompozitörün kare saatine
+  hangi karede düştüğü. Onu ekran görüntüsüyle ölçmek mümkün değil; nested'in
+  llvmpipe ile yazılım render etmesi bunu gerçek oturuma göre daha görünür
+  kılabilir. Not olarak `PLAN.md`'ye düşüldü.
+
+Not / bilinen eksikler
+- **Renk yönetimi kayması.** Gerçek oturumun ekran yakalamasında maskot
+  `#D87656` değil `#d87858` çıkıyor (nested'de tam eşleşiyor). Ölçüm
+  toleransla yapıldı; kod tarafında bir sorun değil, ama ileride piksel
+  karşılaştırması yapan bir test yazılırsa bilinsin.
+- Birleşim kutusu karakterin sıkı kutusundan 1.5 kat büyük olduğu için,
+  karakterin hemen çevresindeki birkaç hücrelik şeffaf alan hâlâ tıklama
+  yutuyor. Prompt bunu açıkça kabul ediyor; daha ileri gitmek kare başına
+  boyutlandırmayı geri getirir.
+
+<!-- Sıradaki: Faz 3 — prompts/faz-3-hooks-ve-durum.md -->
