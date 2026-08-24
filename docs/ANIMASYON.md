@@ -86,11 +86,11 @@ dağıtıp JSON'u yeniden dışa aktar.
 | `read` | Read / Grep / Glob |
 | `scuttle` | Bash |
 | `search` | WebSearch / WebFetch |
-| **`wave`** | **senin girdini bekliyor** |
+| **`waiting`** | **senin girdini bekliyor** |
 | `shake` | araç hata verdi |
 | `celebrate` | tur bitti |
 | `exhausted` | rate limit |
 
-`wave` en kritik olanı. Pet'in tek gerçek işlevi Claude'un sana takıldığını
+`waiting` en kritik olanı. Pet'in tek gerçek işlevi Claude'un sana takıldığını
 haber vermek; o pozu diğerlerinden açık ara ayır — gövde izleyiciye dönük, bir
 kol yukarıda, hafif zıplama.

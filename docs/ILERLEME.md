@@ -297,4 +297,111 @@ Not / bilinen eksikler
   yutuyor. Prompt bunu açıkça kabul ediyor; daha ileri gitmek kare başına
   boyutlandırmayı geri getirir.
 
-<!-- Sıradaki: Faz 3 — prompts/faz-3-hooks-ve-durum.md -->
+## Faz 3 — Hook'lar ve durum            2026-08-24
+
+Pet'te görünür bir değişiklik yok, olmamalı da: eşleme Faz 4'ün işi. Değişen
+tek şey `tracker.js`'in doğru durumu biliyor olması.
+
+Yapılanlar
+- **`hooks/claude-pet-hook.py`** — tek dosya, iki mod. Argümansız çağrılınca
+  stdin'deki hook yükünden yalnızca üç alanı (`hook_event_name`,
+  `notification_type`, `error_type`) alıp inbox'a bırakıyor; `install` /
+  `uninstall` / `status` ile `~/.claude/settings.json`'ı yönetiyor.
+  Yedi olay kaydediliyor, `PreToolUse` dışında matcher yok.
+- **`src/lib/tracker.js`** — `Gio.FileMonitor` ile inbox'ı izliyor, yoklama
+  yok. Tek genel durum (`IDLE`/`WORKING`/`WAITING`) + `rateLimited` bayrağı;
+  oturum başına durum tutulmuyor, son gelen olay kazanıyor. Durum değişince
+  `changed` sinyali yayılıyor — Faz 4 buna bağlanacak.
+- **`tests/replay.js` + `make replay`** — zincirin TAMAMINI sürüyor: geçici bir
+  durum dizini kurup gerçek Python hook betiğini gerçek yüklerle çalıştırıyor,
+  yani test edilen şey yalnızca tracker değil, yazıcı → dosya → FileMonitor →
+  durum makinesi. Gerçek inbox'a ve gerçek oturuma dokunmuyor.
+- **`Makefile`** — `hooks`, `unhooks`, `hooks-status`, `replay`.
+- **`src/extension.js`** — takipçi kuruluyor ve `changed` loglanıyor;
+  `disable()` onu aktörlerden önce söküyor. Animasyona hiç dokunulmadı.
+
+Prompt'tan sapmalar
+1. **`SessionEnd`'de bayat dosya temizliği** (prompt'ta yok). Eklenti kapalıyken
+   hook'lar yazmaya devam ediyor; kimse okumazsa inbox sınırsız büyür. Temizlik
+   yalnızca `SessionEnd`'de yapılıyor — oturum başına bir `listdir`, yazma
+   yolunun süresine etkisi yok.
+2. **`sleep-timeout` GSettings anahtarı değil, kurucu parametresi.** Ayarlar
+   Faz 5'in konusu; şimdilik `sleepTimeoutMs` (varsayılan 5 dk).
+3. **Zaman aşımı `WAITING`'i temizlemiyor.** Prompt'un geçiş tablosu "olay
+   gelmezse IDLE" diyor, ama `WAITING`'den çıkış listesi dört olayla sınırlı ve
+   zaman aşımı o listede yok. Yapışkan okuma seçildi: pet sana soruyorsa, sen
+   cevap verene kadar sormayı bırakmamalı. Sayaç zaten yalnızca `WORKING`'de
+   kuruluyor — boştayken hiçbir zamanlayıcı çalışmıyor.
+4. **`rateLimited` bayrağı `UserPromptSubmit`/`PreToolUse` ile düşüyor**
+   (prompt ne zaman temizleneceğini söylemiyordu): iş yeniden yürüyorsa limit
+   geçmiş demektir.
+
+Ölçümler
+- **Hook süresi: 19,7 ms.** 200 KB'lık gerçek boyutta bir `PreToolUse` yüküyle
+  10 koşum `time` altında 0,197 s. Python yorumlayıcı açılışı dahil. Diskte
+  kalan: **33 bayt** (200 KB girdiden).
+- **`make replay`: 21/21.** Geçiş dizisi:
+  `WORKING → WAITING → WORKING → IDLE → IDLE+rate → WORKING → IDLE`
+- **inotify izleme sayısı: 16 → 17 → 16** (nested kabukta, `enable`/`disable`
+  çevresinde). Takipçi tam bir izleme ekliyor ve geri veriyor.
+
+Doğrulama
+- [x] `make hooks` çalışıyor, `settings.json` geçerli JSON kalıyor, yedek var
+      → gerçek dosyaya kuruldu: 13 anahtar + `hooks` = 14, `statusLine` ve
+      `permissions` aynen yerinde, yedek
+      `settings.json.claude-pet-yedek-20260824-132427`. Var olan
+      `settings.json.bak`'a dokunulmadı (zaman damgalı ad bilerek).
+- [x] Kurulumdan **önce elle bir hook ekle**; `make hooks` sonrası hâlâ orada
+      → izole bir HOME'a kullanıcının gerçek settings.json'u kopyalanıp iki
+      elle hook eklendi (`PreToolUse`/matcher `Bash` ve `PostToolUse`).
+      Kurulumdan sonra: elle yazılan 2, claude-pet 7. İkisi AYNI olayda
+      (`PreToolUse`) yan yana durabiliyor.
+- [x] `make unhooks` yalnızca kendi girdilerini siliyor  → `silinen girdi: 7`;
+      geriye kalan `hooks` ağacı tam olarak elle yazılmış iki girdi, komut
+      satırları harfi harfine aynı. İki kez kurmak girdi çoğaltmıyor (7 kalıyor).
+- [x] Gerçek bir Claude Code oturumunda bir dosya okut → durum `WORKING`
+      → yeni bir `claude -p` oturumu açıldı, nested kabuğun logu:
+      `durum: WORKING` (13:26:55) → `durum: IDLE` (13:27:08).
+- [x] İzin isteyen bir komut → durum `WAITING`, sen cevap verene kadar öyle
+      → tmux'ta etkileşimli `claude --permission-mode default`, onay isteyen
+      bir `touch`. Tamamen izole bir durum dizininde ölçüldü (başka hiçbir
+      oturum oraya yazamaz): `WORKING` 10:51:02 → `WAITING` 10:51:05 →
+      **94 saniye boyunca hiçbir geçiş yok**, istem ekranda → cevap verilince
+      `IDLE` 10:52:39.
+      Ham olaylar da toplandı: `UserPromptSubmit · PreToolUse ·
+      PermissionRequest · Notification(permission_prompt)` — arada `Stop` YOK,
+      yani yapışkanlık yapısal olarak sağlanıyor.
+- [x] `make replay` doğru geçişleri üretiyor  → 21/21, çıktı yukarıda.
+- [x] Inbox'a elle bozuk JSON → pet susuyor, shell ayakta, dosya siliniyor
+      → canlı nested kabukta üç tür birden atıldı: bozuk metin, ikili çöp ve
+      geçerli-ama-yanlış-tipte (`[]`). Üçü de silindi, inbox 0, eklenti
+      `ACTIVE`, kabuk ayakta, iki `console.warn`.
+- [x] Kanarya çalışıyor  → `replay` ilk iş olarak ayrı bir dizinde izleyici
+      kurup gerçekten olay aldığını doğruluyor; alamazsa `make nested-kill`
+      diyen açık bir hata verip duruyor.
+- [x] Devre dışı bırakınca dosya monitörü sökülüyor  → izleme sayısı 17'den
+      16'ya döndü; ayrıca `disable` sonrası inbox'a yazılan olay hiçbir tepki
+      üretmedi ve dosya yerinde kaldı (kimse okumuyor).
+- [x] Hook süresi 50 ms altında  → 19,7 ms.
+
+Notlar / bilinen eksikler
+- **Tek genel durum, çoklu oturumun bedeli.** Bu ölçüm sırasında canlı olarak
+  görüldü: tmux'taki oturum izin istemi gösterirken `WAITING`'deyken, BAŞKA
+  bir Claude Code oturumunun (bu sohbetin) turu bitti, `Stop` yazdı ve durum
+  `IDLE`'a düştü — istem hâlâ ekrandaydı. Prompt'un "oturum başına durum
+  tutma, son gelen olay kazanır" kararının doğrudan sonucu ve tasarım gereği.
+  Aynı anda iki oturum çalıştıran biri için pet yanıltıcı olabilir. Faz 4'te
+  bilinsin; çözüm gerekirse `WAITING`'i oturum kimliğine bağlamak olur.
+- **Açık oturumlar hook'ları ne zaman görüyor.** Kurulumdan sonra ZATEN AÇIK
+  olan bir oturumun da (~1 dk içinde) olay yazmaya başladığı görüldü, yani
+  Claude Code `settings.json`'ı yeniden okuyor. Ama buna güvenilmemeli;
+  kurulum çıktısı "kesin yol yeni oturum" diyor.
+- **`hooks/` ve `tests/` pakete girmiyor.** `gnome-extensions pack` yalnızca
+  `src/` ve açıkça verilen ek kaynakları alıyor. Hook betiği kullanıcının
+  makinesinde depodan çalışıyor; Faz 6'da dağıtım düşünülürken bu ayrım
+  yeniden ele alınmalı (kurulu eklenti dizinine kopyalanması gerekebilir).
+- `docs/PLAN.md`'ye bu fazın notları BİLEREK yazılmadı — kullanıcı Faz 3/4
+  özet satırlarının güncelliğini yitirdiğini, prompt dosyalarının esas
+  olduğunu söyledi.
+
+<!-- Sıradaki: Faz 4 — prompts/faz-4-animasyon-eslemesi.md -->

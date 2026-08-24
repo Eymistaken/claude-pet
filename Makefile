@@ -10,7 +10,8 @@ BUILD   := build
 EXT_DIR := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
 .PHONY: help schemas install uninstall enable disable \
-        nested nested-kill nested-clean nested-log preview logs pack
+        nested nested-kill nested-clean nested-log preview logs pack \
+        hooks unhooks hooks-status replay
 
 help:
 	@echo "claude-pet — hedefler"
@@ -25,6 +26,11 @@ help:
 	@echo "  make nested-kill   test oturumunu ve yetim servisleri kapat"
 	@echo "  make nested-clean  yalnizca yetim servisleri topla"
 	@echo "  make preview       kareleri bagimsiz pencerede ciz (kabuga dokunmaz)"
+	@echo "  make replay        hook -> durum zincirini izole bir dizinde sina"
+	@echo
+	@echo "  make hooks         Claude Code hook'larini ~/.claude/settings.json'a ekle"
+	@echo "  make unhooks       yalnizca claude-pet girdilerini geri al"
+	@echo "  make hooks-status  ne kurulu, inbox'ta ne bekliyor"
 	@echo
 	@echo "  make logs          GERCEK oturumun gnome-shell logu"
 	@echo "  make pack          dagitilabilir .zip uret"
@@ -77,6 +83,28 @@ nested-log:
 # gordugun kare kabugun cizdiginin aynisi.
 preview:
 	gjs -m tools/preview.js
+
+# Hook -> dosya -> FileMonitor -> durum zincirinin tamami, GECICI bir durum
+# dizininde. Gercek inbox'a ve gercek oturuma dokunmuyor. Ilk is olarak bir
+# kanarya kuruyor: inotify limiti doluysa FileMonitor SESSIZCE calismiyor ve
+# bu mantik hatasi gibi gorunuyor.
+replay:
+	gjs -m tests/replay.js
+
+# ------------------------------------------------------------------ hook'lar
+#
+# GERCEK ~/.claude/settings.json'a dokunuyor. Betik once zaman damgali bir
+# yedek aliyor, elle yazilmis hook'lara dokunmuyor ve atomik yaziyor
+# (gecici dosya + rename), yani yarim yazilmis bir settings.json olamaz.
+
+hooks:
+	python3 hooks/claude-pet-hook.py install
+
+unhooks:
+	python3 hooks/claude-pet-hook.py uninstall
+
+hooks-status:
+	@python3 hooks/claude-pet-hook.py status
 
 # Nested oturumun logu journalctl'e DEGIL dosyaya gidiyor; onun icin
 # `make nested-log`. Bu hedef gercek oturumun kabugunu izler.

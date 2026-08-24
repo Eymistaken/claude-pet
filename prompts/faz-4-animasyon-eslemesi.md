@@ -4,119 +4,115 @@
 
 ---
 
-`CLAUDE.md`, `docs/ANIMASYON.md` ve `docs/PLAN.md`'nin Faz 4 bölümünü oku.
-Faz 3 bitmiş olmalı: `tracker.js` doğru durumu biliyor.
+`CLAUDE.md` ve `docs/ANIMASYON.md`'yi oku. Faz 3 bitmiş olmalı: `tracker.js`
+doğru durumu biliyor.
 
-Bu faz pet'i hayata döndürüyor.
+Bu faz pet'i hayata döndürüyor. Dört davranış var, fazlası yok.
 
-## Ön koşul: animasyonu üçe böl
+## Ön koşul: animasyon varlıkları
 
-`assets/animations.json` şu an tek bir 35 karelik `laptop_code` içeriyor. Claude
-kaç saniye kod yazacağı belli olmadığı için bu tek parça kullanılamaz. Üçe
-bölünmesi gerekiyor:
+`assets/animations.json` içinde şunlar hazır olmalı:
 
-| Klip | Kareler | loop |
+| Klip | loop | Ne |
 |---|---|---|
-| `laptop_out` | açılış — cebe uzanma, laptobun çıkışı, dönüş | hayır |
-| `typing` | yazma karelerinin döngüsü | evet |
-| `laptop_away` | toparlanma, nötre dönüş | hayır |
+| `idle` | evet | Düz duruş (zaten var) |
+| `laptop_out` | hayır | Cebe uzanma, laptobun çıkışı, dönüş |
+| `typing` | evet | Yazma döngüsü |
+| `laptop_away` | hayır | Toparlanma, düz duruşa dönüş |
+| `waiting_in` | hayır | Kutuya çökme |
+| `waiting` | evet | Kutu — bekliyor (tek statik kare) |
+| `waiting_out` | hayır | Uyanma, düz duruşa dönüş |
 
-**Bu bölme işini sen yapma.** Poz atölyesinde yapılacak ve JSON güncellenecek.
-Bölünmüş dosya elinde yoksa dur ve söyle; ben bölüp vereceğim. Bölünmüş dosya
-varsa devam et.
+**Yedisi de `assets/animations.json` içinde hazır, doğrulandı.** Bölme işi poz
+atölyesinde yapıldı; sen varlığa dokunma. Bir klip eksikse dur ve söyle.
 
-## Yazılacak dosyalar
+Yapı iki üçlüden ibaret: `laptop_out → typing → laptop_away` ve
+`waiting_in → waiting → waiting_out`. Her üçlüde **ortadaki döngüde döner**,
+yandakiler bir kez oynar.
 
-### `src/lib/states.js`
+## `src/lib/director.js`
 
-**Tek bir tablo.** `if` zinciri yazma — "şu araca şu animasyonu bağla" demek
-tek satır olmalı.
+`tracker.changed` sinyalini dinler, `player`'ı sürer. Dört kural:
+
+**1. `WORKING` → laptop çıkar ve kalır.**
+
+`laptop_out` bir kez oynar, bitince `typing` döngüye girer. Ondan sonra pet
+kod yazma modunda kalır. Araya giren araç çağrıları laptobu **kaldırmaz** —
+Claude hâlâ aynı işin içinde, her çağrıda laptobu cebe koyup çıkarmak hem
+titrek durur hem yanlış anlatır.
+
+**2. `IDLE` → laptop kalkar, düz durur.**
+
+`laptop_away` oynar, sonra `idle`. Zaten `IDLE`'daysa bir şey yapma.
+
+**3. `WAITING` → bekleme pozu.**
+
+Devam eden animasyonu kes, `laptop_away` oynat (laptop varsa), sonra `waiting_in` bir kez, ardından
+`waiting` döngüsüne gir.
+`WAITING` her şeyi ezer; pet'in tek gerçek işlevi Claude'un sana takıldığını
+haber vermek.
+
+**4. Animasyonu ortasından kesme.**
+
+Durum değişince çalan klibi anında kesme — **bulunduğu turu bitirmesini bekle.**
+`typing` döngüsünün ortasındayken iş biterse, o turun son karesine kadar oynasın,
+sonra `laptop_away`'e geç. Aynısı `waiting` için de geçerli.
+
+Bekleme süresi kısadır (17 karelik bir döngü 15 fps'de en fazla ~1.1 sn) ve
+karşılığında hareket kopuk değil akıcı görünür. Tek istisna aşağıdaki rate limit.
+
+**5. Rate limit → laptop aniden kaybolur.**
+
+`tracker` `rateLimited` bayrağıyla `IDLE` verdiğinde `laptop_away`'i
+**oynatma**. Laptop actor'ünü doğrudan gizle ve `idle`'a geç. Ani olması
+kasıtlı: bir şey ters gitti, animasyonlu bir kapanış yanlış ton olur.
+
+**Boşta uyku:** `sleep` klibi varlıkta varsa, `sleep-timeout` (varsayılan 3 dk)
+sonunda ona geç. Yoksa `idle`'da kal. Uykuda zamanlayıcı tamamen dursun.
+
+## `src/lib/states.js`
+
+Durum → klip adı eşlemesi. Tek bir tablo, `if` zinciri değil:
 
 ```js
-export const TOOL_ANIM = {
-  "Edit": "laptop_out", "Write": "laptop_out", "NotebookEdit": "laptop_out",
-  "Bash": "scuttle", "BashOutput": "scuttle",
-  "Read": "read", "Grep": "read", "Glob": "read",
-  "WebSearch": "search", "WebFetch": "search",
-  // ...
-};
 export const STATE_ANIM = {
-  IDLE: "sleep", THINKING: "think", WAITING_INPUT: "wave",
+  IDLE: 'idle',
+  WORKING: 'typing',
+  WAITING: 'waiting',
 };
 ```
 
-Henüz çizilmemiş animasyonlar için (`sleep`, `wave`, `think`, `read`,
-`scuttle`, `search`, `shake`, `celebrate`) **bir yedek zinciri** olsun: animasyon
-JSON'da yoksa nötr duruşa düş ve `console.debug` ile bir kez bildir. Eksik
+Klip varlıkta yoksa `idle`'a düş ve bir kez `console.debug` ile bildir. Eksik
 animasyon pet'i durdurmasın.
 
-### `src/lib/director.js`
+## `src/extension.js`
 
-Durum değişimlerini animasyon dizisine çeviren katman. Asıl iş burada:
-
-- **Kod yazma modu YAPIŞKANDIR.** Bu fazın en önemli kuralı.
-
-  İlk `Edit` / `Write` / `NotebookEdit` gelince `laptop_out` bir kez oynar,
-  bitince `typing` döngüye girer. Ondan sonra pet **kod yazma modunda kalır**.
-
-  Araya giren `Read`, `Grep`, `Glob`, `Bash`, `WebSearch` gibi çağrılar
-  laptobu **kaldırmaz** — Claude hâlâ aynı işin içinde. Bir dosyayı okumak
-  için laptobu cebe koyup geri çıkarmak hem titrek durur hem yanlış anlatır.
-
-  `laptop_away` yalnızca gerçekten farklı bir duruma geçilince oynar:
-
-  | Çıkış tetiği | Sonrası |
-  |---|---|
-  | `WAITING_INPUT` (izin isteği, soru, plan onayı) | `wave` |
-  | `Stop` (tur bitti) | `celebrate` |
-  | `SessionEnd` | `sleep` |
-  | `sleep-timeout` kadar hiç olay gelmemesi | `sleep` |
-
-  `PostToolUseFailure` bir istisna: `shake` bir kez oynar ve **`typing`'e geri
-  döner**, laptop kalkmaz. Hata kod yazmanın parçası.
-
-  Uygulaması: `director` içinde `codingMode` diye bir bayrak tut. Yukarıdaki
-  dört tetikten biri gelmeden `false` olmasın.
-- **Tek seferlik tepkiler** araya girer, sonra önceki duruma döner:
-  `PostToolUseFailure` → `shake`, `Stop` → `celebrate`.
-- **`WAITING_INPUT` her şeyi ezer.** Devam eden animasyonu kes, `wave`'e geç.
-  Yalnızca yeni bir `UserPromptSubmit` ya da `PostToolUse` ile temizlenir.
-- **Boşta uyku.** `sleep-timeout` (varsayılan 3 dk) boyunca hiçbir olay
-  gelmezse `sleep`. Uykuda zamanlayıcı tamamen dursun — tek statik kare, en
-  fazla 10 saniyede bir göz kırpma.
-
-### `src/extension.js`
-
-`tracker.changed` sinyalini `director`'a bağla, `director` da `player`'ı
-sürsün. Geçici "başlangıçta laptop_code oynat" kodunu kaldır.
-
-### Dikkat çekme (isteğe bağlı ama önerilir)
-
-`WAITING_INPUT` ilk kez girildiğinde `Main.notify()` ile kısa bir bildirim.
-Ayarla kapatılabilir olsun (Faz 5'te anahtarı eklenecek; şimdilik sabit `true`
-bırak ve TODO düş).
+`tracker` → `director` → `player` zincirini kur. Faz 1'in geçici
+`GECICI_ANIMASYON` sabitini ve döngü zorlamasını kaldır.
 
 ## Kısıtlar
 
-- Yeni animasyon **çizme**. Eksik olanları yedek zinciriyle geç.
-- `tracker.js`'in durum mantığına dokunma; o Faz 3'te bitti.
-- Ayarlar penceresi Faz 5.
+- Animasyon **çizme**, `assets/animations.json`'a dokunma.
+- Araç adı eşlemesi yapma. `WORKING` tek bir durum.
+- `tracker.js`'in mantığına dokunma, o Faz 3'te bitti.
 
 ## Bitti sayılma koşulu
 
-Gerçek bir Claude Code oturumuyla dene, `make replay` ile değil.
+Gerçek bir Claude Code oturumuyla dene.
 
-- [ ] Bir dosya okut → pet `read` (ya da yedek) oynatıyor
-- [ ] Bir dosya düzenlet → `laptop_out` → `typing` zinciri çalışıyor
-- [ ] **Arka arkaya üç Edit yaptır** → laptop bir kez çıkıyor, üçü boyunca
-      elinde kalıyor, sonunda bir kez kalkıyor
-- [ ] İzin isteyen bir komut çalıştır → pet `wave`'e geçiyor ve sen cevap
-      verene kadar öyle kalıyor
-- [ ] Hata veren bir komut çalıştır → `shake` bir kez oynayıp önceki duruma
-      dönüyor
-- [ ] Tur bitince `celebrate` oynuyor
-- [ ] 3 dakika bekle → `sleep`, ve gnome-shell CPU'su sıfıra iniyor
-- [ ] JSON'da olmayan bir animasyon adı iste → pet nötre düşüyor, shell ayakta
+- [ ] Claude Code kapalıyken pet düz duruyor
+- [ ] Bir şey yaptır → laptop çıkıyor ve **iş bitene kadar elinde kalıyor**
+      (arada birkaç farklı araç çalışsa da)
+- [ ] İzin isteyen bir komut → laptop kalkıyor, pet bekleme pozuna geçiyor,
+      sen cevap verene kadar öyle kalıyor
+- [ ] Cevap ver → `waiting_out` bir kez oynuyor, sonra yazmaya dönüyor
+- [ ] Tur bitince laptop kalkıyor, düz duruşa dönüyor
+- [ ] **Yazma döngüsünün ortasında iş bitse bile animasyon yarıda kesilmiyor**,
+      tur tamamlanıp öyle geçiyor
+- [ ] Rate limit senaryosunu `make replay` ile tetikle → laptop **aniden**
+      kayboluyor, animasyon oynamıyor
+- [ ] Varlıkta olmayan bir klip iste → pet `idle`'a düşüyor, shell ayakta
+- [ ] 3 dk bekle → boşta, gnome-shell CPU'su sıfır
 - [ ] Devre dışı bırakınca bütün zamanlayıcılar sökülüyor
 
 Bir ekran kaydı al ve izle — bu fazın çıktısı hissedilen bir şey, log değil.

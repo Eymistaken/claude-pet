@@ -29,6 +29,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {loadAnimations} from './lib/animations.js';
 import {drawLayer} from './lib/sprite.js';
 import {Player} from './lib/player.js';
+import {Tracker} from './lib/tracker.js';
 
 const LOG = '[claude-pet]';
 
@@ -80,6 +81,7 @@ export default class ClaudePetExtension extends Extension {
         this._originY = 0;
         // Fazın merkezî iddiası ölçülebilir kalsın: kare sayısı yüzlerceyken
         // boyutlandırma sayısı animasyon değişimi kadar olmalı.
+        this._tracker = null;
         this._frameCount = 0;
         this._resizeCount = 0;
         // Katman gizlenip gösterilmesi dışarıdan görünmüyor (Wayland'de input
@@ -106,6 +108,13 @@ export default class ClaudePetExtension extends Extension {
             this._restorePosition();
             this._makeDraggable();
 
+            // Durum takibi (Faz 3). Pet HENÜZ TEPKİ VERMİYOR: eşleme Faz 4'ün
+            // işi, burada yalnızca doğru durumun bilindiği görülüyor.
+            this._tracker = new Tracker();
+            this._connect(this._tracker, 'changed', (_t, durum, rateLimited) =>
+                console.log(`${LOG} durum: ${durum}${rateLimited ? ' · rate limit' : ''}`));
+            this._tracker.start();
+
             console.log(`${LOG} etkin · ızgara (${this._originX}, ${this._originY}) · ` +
                 `hücre ${this._cell}px · ${Object.keys(this._sheet.animations).length} animasyon`);
         } catch (error) {
@@ -121,6 +130,10 @@ export default class ClaudePetExtension extends Extension {
             // uyanan bir kare geri çağrısı ölü bir aktöre uzanır.
             this._player?.stop();
             this._player = null;
+
+            // Dosya izleyicisi de zamanlayıcı gibi: aktörlerden önce sökülsün.
+            this._tracker?.stop();
+            this._tracker = null;
 
             // Sürüklemenin ORTASINDA kapatılıyor olabiliriz: kilit ekranı
             // disable() çağırıyor. Bırakılmamış bir Clutter.Grab bütün girdiyi

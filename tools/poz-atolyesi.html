@@ -1,0 +1,1421 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clawd Poz Atölyesi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+
+<style>
+:root{
+  --ground:#EEF0F3;
+  --panel:#FFFFFF;
+  --panel-2:#F6F7F9;
+  --line:#D8DDE4;
+  --line-soft:#E7EAEF;
+  --ink:#191C21;
+  --ink-2:#565E6B;
+  --ink-3:#8B939F;
+  --clay:#C4633F;
+  --clay-ink:#FFFFFF;
+  --steel:#7E8794;
+  --sel:#2F6FED;
+  --shadow:0 1px 2px rgba(20,25,33,.06),0 8px 24px rgba(20,25,33,.06);
+  --canvas-dark:#1B1E24;
+  --canvas-light:#F4F4F6;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1216;
+    --panel:#171B21;
+    --panel-2:#1D222A;
+    --line:#2A313B;
+    --line-soft:#222831;
+    --ink:#E8ECF2;
+    --ink-2:#9AA4B2;
+    --ink-3:#6C7684;
+    --clay:#D87656;
+    --clay-ink:#17110E;
+    --steel:#8B8B8B;
+    --sel:#6E9BFF;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1216;
+  --panel:#171B21;
+  --panel-2:#1D222A;
+  --line:#2A313B;
+  --line-soft:#222831;
+  --ink:#E8ECF2;
+  --ink-2:#9AA4B2;
+  --ink-3:#6C7684;
+  --clay:#D87656;
+  --clay-ink:#17110E;
+  --steel:#8B8B8B;
+  --sel:#6E9BFF;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:13px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.prose{font-family:"IBM Plex Sans",system-ui,sans-serif}
+
+/* ---------- header ---------- */
+header{
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 18px;
+  padding:20px 22px 16px;
+  border-bottom:1px solid var(--line);
+  background:var(--panel);
+}
+h1{
+  margin:0;
+  font-family:"Bricolage Grotesque","IBM Plex Sans",system-ui,sans-serif;
+  font-weight:800;font-size:20px;letter-spacing:-.015em;
+}
+h1 span{color:var(--clay)}
+.sub{margin:0;color:var(--ink-2);font-size:12px;max-width:62ch}
+.sub code{background:var(--panel-2);border:1px solid var(--line-soft);border-radius:4px;padding:1px 5px}
+
+/* ---------- layout ---------- */
+main{
+  display:grid;
+  grid-template-columns:204px minmax(0,1fr) 272px;
+  gap:1px;
+  background:var(--line);
+  min-height:calc(100vh - 78px);
+}
+.col{background:var(--ground);padding:14px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.col.center{background:var(--panel-2);align-items:center}
+
+@media (max-width:1080px){
+  main{grid-template-columns:1fr;min-height:0}
+  .col.rail{order:2}
+  .col.center{order:1}
+  .col.side{order:3}
+}
+
+/* ---------- panels ---------- */
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:11px 12px 12px;
+  box-shadow:var(--shadow);
+}
+.eyebrow{
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 9px;font-weight:600;
+}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.row.tight{gap:4px}
+.row.nowrap{flex-wrap:nowrap;justify-content:space-between}
+.spread{display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+/* ---------- controls ---------- */
+button,select,input[type=text],input[type=number]{
+  font:inherit;color:var(--ink);
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:5px 9px;
+  cursor:pointer;
+}
+button:hover,select:hover{border-color:var(--ink-3)}
+button:focus-visible,select:focus-visible,input:focus-visible,
+[tabindex]:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+button.ghost{background:transparent}
+button[aria-pressed="true"],button.on,
+button.ghost[aria-pressed="true"],button.ghost.on{
+  background:var(--clay);border-color:var(--clay);color:var(--clay-ink);font-weight:600;
+}
+button.icon{padding:4px 6px;min-width:28px;text-align:center}
+button:disabled{opacity:.4;cursor:not-allowed}
+input[type=text],input[type=number]{cursor:text;width:100%}
+input[type=range]{width:100%;accent-color:var(--clay)}
+label.field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--ink-2);flex:1;min-width:0}
+.hint{font-size:11px;color:var(--ink-3);margin:0}
+kbd{
+  font:inherit;font-size:10px;background:var(--panel-2);
+  border:1px solid var(--line);border-bottom-width:2px;
+  border-radius:4px;padding:0 4px;color:var(--ink-2);
+}
+
+/* ---------- frame rail ---------- */
+.frames{display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:min(52vh,520px);padding-right:2px}
+@media (max-width:1080px){.frames{flex-direction:row;max-height:none;overflow-x:auto}}
+.frame{
+  position:relative;display:flex;align-items:center;gap:8px;
+  border:1px solid var(--line);border-radius:6px;background:var(--panel);
+  padding:4px 6px;cursor:pointer;flex:none;
+}
+.frame:hover{border-color:var(--ink-3)}
+.frame[aria-current="true"]{border-color:var(--clay);box-shadow:inset 0 0 0 1px var(--clay)}
+.frames{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){.frames{scroll-behavior:auto}}
+.frame canvas{display:block;border-radius:3px;background:var(--canvas-dark)}
+.frame .n{font-size:10px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.frame .hold{position:absolute;right:3px;bottom:2px;color:var(--clay);font-weight:600;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:0 3px;line-height:1.4}
+.sub code,.hint code{background:var(--panel-2);border:1px solid var(--line-soft);border-radius:4px;padding:1px 5px}
+
+/* ---------- editor ---------- */
+.stage{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  width:100%;
+}
+.canvas-wrap{
+  border:1px solid var(--line);border-radius:8px;overflow:auto;max-width:100%;
+  background:var(--canvas-dark);box-shadow:var(--shadow);
+}
+#edit{display:block;touch-action:none;image-rendering:pixelated;cursor:crosshair}
+#edit.sel{cursor:cell}
+.frame.range{background:color-mix(in srgb,var(--clay) 16%,var(--panel))}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{
+  font:inherit;font-size:11px;padding:2px 7px;border-radius:999px;
+  border:1px dashed var(--line);background:transparent;color:var(--ink-2);cursor:pointer;
+}
+.chip:hover{border-color:var(--clay);color:var(--clay)}
+.chip.has{border-style:solid;border-color:var(--line-soft);color:var(--ink-3)}
+.chip.hedef{border-style:solid;border-color:var(--line);color:var(--ink-2);
+  display:inline-flex;align-items:baseline;gap:5px}
+.chip.hedef:hover{border-color:var(--clay);color:var(--clay);background:color-mix(in srgb,var(--clay) 10%,transparent)}
+.chip.hedef b{font-variant-numeric:tabular-nums;color:var(--clay);font-weight:600}
+.chip.hedef.bos b{color:var(--ink-3);font-weight:400}
+.chip .bosalt{
+  margin-left:2px;padding:0 3px;border-radius:4px;color:var(--ink-3);
+  font-weight:700;line-height:1;
+}
+.chip .bosalt:hover{background:var(--clay);color:var(--clay-ink)}
+.selbar{display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.selbar.on{display:flex}
+.readout{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+.swatch{width:16px;height:16px;border-radius:3px;border:1px solid rgba(128,128,128,.45);flex:none}
+
+/* ---------- preview ---------- */
+.preview-box{
+  display:grid;place-items:center;
+  border:1px solid var(--line);border-radius:8px;padding:10px;min-height:150px;
+}
+#preview{display:block;image-rendering:pixelated}
+.bg-dark{background:var(--canvas-dark)}
+.bg-light{background:var(--canvas-light)}
+.bg-check{
+  background-image:
+    linear-gradient(45deg,rgba(128,128,128,.22) 25%,transparent 25%),
+    linear-gradient(-45deg,rgba(128,128,128,.22) 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,rgba(128,128,128,.22) 75%),
+    linear-gradient(-45deg,transparent 75%,rgba(128,128,128,.22) 75%);
+  background-size:12px 12px;
+  background-position:0 0,0 6px,6px -6px,-6px 0;
+}
+
+/* ---------- export ---------- */
+textarea{
+  font:inherit;font-size:11px;width:100%;height:140px;resize:vertical;
+  background:var(--panel-2);color:var(--ink);
+  border:1px solid var(--line);border-radius:6px;padding:8px;
+  white-space:pre;overflow:auto;
+}
+.toast{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(8px);
+  background:var(--ink);color:var(--ground);
+  padding:8px 16px;border-radius:999px;font-size:12px;
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:20;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+
+
+<header>
+  <h1>Clawd <span>Poz Atölyesi</span></h1>
+  <p class="sub prose">Claude masaüstü maskotunun kod yazma animasyonu, ekran kaydından çıkarılmış <b>35 karenin tamamıyla</b> yüklü — cebe uzanma, laptobun açılışı, yazma döngüsü, toparlanma. Kareleri düzenle, yenilerini ekle, oynat; sonucu <code>poses.js</code> için hazır JSON olarak dışa aktar.</p>
+</header>
+
+<main>
+  <!-- ---------------- sol: kareler ---------------- -->
+  <section class="col rail" aria-label="Kareler">
+    <div class="card">
+      <p class="eyebrow">Animasyon</p>
+      <div class="row" style="margin-bottom:8px">
+        <select id="animSel" style="flex:1;min-width:0"></select>
+      </div>
+      <div class="row tight" style="margin-bottom:9px">
+        <button class="ghost icon" id="animAdd" title="Yeni boş animasyon">+</button>
+        <button class="ghost icon" id="animDup" title="Bu animasyonu çoğalt">⧉</button>
+        <button class="ghost icon" id="animRename" title="Yeniden adlandır">Ad</button>
+        <button class="ghost icon" id="animDel" title="Animasyonu sil">✕</button>
+      </div>
+      <p class="eyebrow" style="margin:0 0 6px">Hazır adlar</p>
+      <div class="chips" id="presets"></div>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Palet</p>
+      <label class="field" style="flex-direction:row;align-items:center;gap:8px">
+        <input type="color" id="palBody" style="width:34px;height:26px;padding:1px">
+        <span>Gövde</span>
+      </label>
+      <label class="field" style="flex-direction:row;align-items:center;gap:8px;margin-top:6px">
+        <input type="color" id="palEye" style="width:34px;height:26px;padding:1px">
+        <span>Göz</span>
+      </label>
+      <label class="field" style="flex-direction:row;align-items:center;gap:8px;margin-top:6px">
+        <input type="color" id="palLaptop" style="width:34px;height:26px;padding:1px">
+        <span>Laptop</span>
+      </label>
+      <button class="ghost" id="palReset" style="margin-top:8px;width:100%">Varsayılana dön</button>
+    </div>
+
+    <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column">
+      <div class="spread" style="margin-bottom:9px">
+        <p class="eyebrow" style="margin:0">Kareler</p>
+        <span class="n readout" id="frameCount"></span>
+      </div>
+      <div class="frames" id="frames"></div>
+      <p class="hint" style="margin-top:8px">Kare aralığı için <kbd>Shift</kbd>+tık</p>
+
+      <p class="eyebrow" style="margin:10px 0 6px">Gönder <span id="gonderKac" style="text-transform:none;letter-spacing:0;color:var(--ink-3);font-weight:400"></span></p>
+      <div class="chips" id="hedefler"></div>
+      <div class="row tight" style="margin-top:8px">
+        <button class="ghost" id="gonderGeri" style="flex:1">Son göndermeyi geri al</button>
+        <button class="ghost" id="hepsiniSifirla" title="Bölmeleri boşalt">Sıfırla</button>
+      </div>
+      <div class="row tight" style="margin-top:6px">
+        <button class="ghost" id="copGeri" style="width:100%" disabled>Geri getir</button>
+      </div>
+      <p class="hint" style="margin-top:8px">Kareler hedefin <b>sonuna kopyalanır</b>; buradaki animasyon bozulmaz. <b>↻</b> işaretli olan sürekli tekrar eder, diğerleri bir kez oynar.</p>
+
+      <div class="row tight" style="margin-top:10px">
+        <button class="ghost" id="rangeToAnim" style="width:100%" disabled>Seçili kareleri yeni animasyona</button>
+      </div>
+      <div class="row tight nowrap" style="margin-top:10px">
+        <button class="ghost icon" id="fAdd" title="Boş kare ekle">+</button>
+        <button class="ghost icon" id="fDup" title="Kareyi çoğalt">⧉</button>
+        <button class="ghost icon" id="fUp" title="Yukarı taşı">↑</button>
+        <button class="ghost icon" id="fDown" title="Aşağı taşı">↓</button>
+        <button class="ghost icon" id="fDel" title="Kareyi sil">✕</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------- orta: çizim ---------------- -->
+  <section class="col center" aria-label="Çizim alanı">
+    <div class="stage">
+      <div class="card" style="width:100%;max-width:760px">
+        <div class="row" style="justify-content:space-between">
+          <div class="row tight" role="group" aria-label="Malzeme">
+            <button id="tool-b" aria-pressed="true" title="Gövde — 1"><span class="swatch" style="background:#D87656;display:inline-block;vertical-align:-3px;margin-right:6px"></span>Gövde</button>
+            <button id="tool-e" aria-pressed="false" title="Göz — 2"><span class="swatch" style="background:#2B2A26;display:inline-block;vertical-align:-3px;margin-right:6px"></span>Göz</button>
+            <button id="tool-l" aria-pressed="false" title="Laptop — 3"><span class="swatch" style="background:#8B8B8B;display:inline-block;vertical-align:-3px;margin-right:6px"></span>Laptop</button>
+            <button id="tool-x" aria-pressed="false" title="Sil — 4">Sil</button>
+            <button id="tool-s" aria-pressed="false" title="Seç — 5 · sürükleyerek alan seç">Seç</button>
+          </div>
+          <div class="row tight">
+            <button class="ghost icon" id="undo" title="Geri al — Ctrl+Z">↶</button>
+            <button class="ghost icon" id="redo" title="İleri al — Ctrl+Shift+Z">↷</button>
+          </div>
+        </div>
+
+        <div class="selbar" id="selbar">
+          <span class="readout" id="selInfo"></span>
+          <button class="ghost" id="copyBtn" title="Ctrl+C">Kopyala</button>
+          <button class="ghost" id="cutBtn" title="Ctrl+X">Kes</button>
+          <button class="ghost" id="pasteBtn" title="Ctrl+V — seçimin sol üstüne">Yapıştır</button>
+          <button class="ghost" id="pasteAllBtn" title="Ctrl+Shift+V — bu animasyonun bütün karelerine">Tüm karelere</button>
+          <button class="ghost" id="clearSelBtn" title="Delete">Sil</button>
+          <button class="ghost" id="dropSelBtn" title="Esc">Seçimi bırak</button>
+        </div>
+        <div class="row tight" style="margin-top:8px">
+          <button class="ghost" id="selAllBtn" title="Ctrl+A">Tümünü seç</button>
+          <span class="hint">Sürükleyerek alan seç · ok tuşları taşır · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> tüm karelere</span>
+        </div>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="edit" width="10" height="10"></canvas>
+      </div>
+
+      <div class="card" style="width:100%;max-width:760px">
+        <div class="row" style="justify-content:space-between">
+          <div class="row tight">
+            <button class="ghost icon" id="nL" title="Sola kaydır">←</button>
+            <button class="ghost icon" id="nR" title="Sağa kaydır">→</button>
+            <button class="ghost icon" id="nU" title="Yukarı kaydır">↑</button>
+            <button class="ghost icon" id="nD" title="Aşağı kaydır">↓</button>
+            <button class="ghost" id="mirror" title="Yatay aynala">Aynala</button>
+            <button class="ghost" id="clear" title="Kareyi temizle">Temizle</button>
+          </div>
+          <div class="row tight">
+            <span class="readout" style="margin-right:2px">Tutma</span>
+            <button class="ghost icon" id="holdDn" title="Bu kare daha kısa dursun">−</button>
+            <b id="holdVal" style="min-width:18px;text-align:center;font-variant-numeric:tabular-nums">1</b>
+            <button class="ghost icon" id="holdUp" title="Bu kare daha uzun dursun">+</button>
+            <button class="ghost" id="onion" aria-pressed="true">Soğan zarı</button>
+            <button class="ghost" id="guide" aria-pressed="true">Kılavuz</button>
+            <label class="field" style="max-width:120px">
+              <span>Yakınlaştır</span>
+              <input type="range" id="zoom" min="5" max="20" step="1" value="12">
+            </label>
+          </div>
+        </div>
+        <p class="readout" id="readout" style="margin:8px 0 0">—</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------- sağ: önizleme + dışa aktarma ---------------- -->
+  <section class="col side" aria-label="Önizleme ve dışa aktarma">
+    <div class="card">
+      <div class="spread" style="margin-bottom:9px">
+        <p class="eyebrow" style="margin:0">Önizleme</p>
+        <div class="row tight">
+          <button class="ghost icon" id="bgD" aria-pressed="true" title="Koyu zemin">◼</button>
+          <button class="ghost icon" id="bgL" aria-pressed="false" title="Açık zemin">◻</button>
+          <button class="ghost icon" id="bgC" aria-pressed="false" title="Damalı zemin">▩</button>
+        </div>
+      </div>
+      <div class="preview-box bg-dark" id="previewBox">
+        <canvas id="preview" width="10" height="10"></canvas>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="play" style="flex:1">▶ Oynat</button>
+        <span class="readout" id="playPos" style="min-width:52px;text-align:center">1 / 1</span>
+        <button class="ghost" id="loop" aria-pressed="true" title="Döngü">↻</button>
+      </div>
+      <p class="hint" style="margin-top:6px">Oynarken soldaki şerit ve çizim alanı takip eder. <kbd>Boşluk</kbd> ile durdurunca o karede kalırsın — düzeltmeye hemen başlayabilirsin.</p>
+      <div class="row" style="margin-top:8px">
+        <label class="field"><span>Kare/sn <b id="fpsVal">8</b></span>
+          <input type="range" id="fps" min="2" max="24" step="1" value="8"></label>
+        <label class="field"><span>Ölçek <b id="scaleVal">3</b>×</span>
+          <input type="range" id="scale" min="1" max="6" step="1" value="3"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Dışa aktar</p>
+      <div class="row tight" style="margin-bottom:8px">
+        <button id="fmtGrid" aria-pressed="true">Izgara</button>
+        <button id="fmtRuns" aria-pressed="false" title="Yatay dikdörtgenlere böler — Cairo çizim çağrısı sayısını ~10 kat azaltır">Dikdörtgen</button>
+      </div>
+      <textarea id="out" spellcheck="false" aria-label="JSON"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="copy" style="flex:1">Panoya kopyala</button>
+        <button class="ghost" id="import" title="Kutudaki JSON'u yükle">İçe al</button>
+        <button class="ghost" id="reset" title="Orijinal 9 kareyi geri yükle">↺</button>
+      </div>
+      <p class="hint" style="margin-top:8px">Bu JSON doğrudan <b>src/lib/poses.js</b>'e girer. <b>Dikdörtgen</b> biçimi her kareyi yatay şeritlere böler; Cairo'daki çizim çağrısını ~10 kat azaltır.</p>
+      <p class="hint" style="margin-top:6px"><b>İçe al:</b> <code>extract_frames.py</code>'nin ürettiği JSON'u kutuya yapıştırıp bas. Tuval boyutu farklıysa tuval ona göre büyür.</p>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Kısayollar</p>
+      <p class="hint" style="line-height:1.9">
+        <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> malzeme ·
+        <kbd>5</kbd> seç ·
+        <kbd>Boşluk</kbd> oynat ·
+        <kbd>[</kbd><kbd>]</kbd> kare ·
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> geri al ·
+        sağ tık siler
+      </p>
+      <p class="hint" style="line-height:1.9;margin-top:6px">
+        Seçimde: <kbd>Ctrl</kbd>+<kbd>A</kbd> tümü ·
+        <kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>X</kbd>/<kbd>V</kbd> ·
+        <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> tüm karelere ·
+        <kbd>↑↓←→</kbd> taşı ·
+        <kbd>Del</kbd> sil ·
+        <kbd>Esc</kbd> bırak
+      </p>
+      <p class="hint" style="margin-top:8px">Çalışman tarayıcıda otomatik saklanır. Yine de bitirince JSON'u kopyalayıp repoya koy.</p>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+
+const REF = {"w":53,"h":37,"anims":[{"name":"laptop_code","fps":15,"loop":false,"holds":[26,1,2,1,2,2,2,1,2,2,1,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,2,2,1,4,1,16],"frames":[[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................###oo###########oo###..........","......................##ooo###########oo###..........",".....................####oo###########oo###..........",".................###############################.....",".................###############################.....",".................###############################.....",".................###############################.....",".................###############################.....","......................#####################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#.......#................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................#########################......","......................##########################.....","......................##########################.....","......................###oo#####################.....","......................##ooo##########ooo########.....","...................##################ooo#######......","..................#########################..........","..................#########################..........","..................#########################..........","...................########################..........","...................########################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................#########################......","......................##########################.....","......................##########################.....","......................###oo#####################.....","......................##ooo##########ooo########.....","......................###o###########ooo#######......",".....................######################..........","..................#########################..........","..................#########################..........","..................#########################..........","..................#########################..........","...................########################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................#########################......","......................##########################.....","......................##########################.....","......................###oo#####################.....","......................##ooo##########ooo########.....","...................######o###########ooo#######......","..................#########################..........","..................#########################..........","..................#########################..........","...................########################..........","....................#######################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................#########################......","......................##########################.....","......................##########################.....","......................###oo#####################.....","......................##ooo##########ooo########.....","......................###o###########ooo#######......",".....................######################..........","..................#########################..........","..................#########################..........","..................#########################..........","..................#########################..........","...................########################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","...................L.................................","..................LLL................................","................LLLLL................................","............LLLLLLL..................................","............LLLLLL...................................","............LLLL......#####################..........","............LLLLLLLL..#####################..........",".................########oo###########oo###..........",".................#######ooo###########oo###..........",".................########oo###########oo###..........",".................##########################..........",".................###############################.....",".................###############################.....","..................##############################.....","....................############################.....","......................##########################.....","......................#####################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".............L.......................................",".............L.......................................",".............L.......................................",".............L.......................................",".............L.......................................",".............LL......................................",".............LLLLLLLL................................",".................#####...............................",".................######..............................",".................##########################..........",".................##########################..........",".................########oo###########oo###..........",".................#######ooo###########oo###..........","......................###oo###########oo###..........","......................#####################..........","......................##########################.....","......................##########################.....","......................##########################.....","......................##########################.....","......................##########################.....","......................#####################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................#####################..........",".......LL.............#####################..........","......LLL.............##ooo###########oo###..........",".....LLLLL............##ooo###########oo########.....",".....LLLLLLL.......#############################.....","......LLLLLL......##############################.....",".......LLLLLLLLLLL##############################.....","........LLLLLLLLLLL#############################.....","..........LLLLLLLLL########################..........",".................##########################..........",".................##########################..........",".................##########################..........",".................##########################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................##ooo###########oo###..........","......................##ooo###########oo###..........","......................##########################.....","......................##########################.....","......................##########################.....","......................##########################.....","......................##########################.....",".................##########################..........",".................##########################..........",".....LL..........##########################..........",".....LLL.........##########################..........","......LLL........########..###.....###..###..........",".......LLL........#######..###.....###..###..........","........LLL...........###..###.....###..###..........",".........LLL..........###..###.....###..###..........","..........LLLLLLLL....###..###.....###..###..........","...........LLLLLLL.....#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................#####################..........","......................#########################......",".....................###ooo###########oo########.....",".................#######ooo###########oo########.....",".................###############################.....",".................###############################.....",".................##############################......",".................##########################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................#####################..........","....LLL...............###..###.....###..###..........","......LLL.............###..###.....###..###..........",".......LLL............###..###.....###..###..........",".........LLL..........###..###.....###..###..........","..........LLLLLLLL....###..###.....###..###..........","...........LLLLLLL.....#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####.........####................","...................######.......######...............","...................######.......######...............","..................#######.......#######..............","..................#######################............","..................#######################............","..................#######################............","..................#######################............","....................#####################............",".....................####################............",".....................#ooo##########oo####............",".....................#ooo##########oo####............",".....................####################............",".....................####################............",".....................####################............",".....................####################............",".....................####################............",".....................####################............",".....LL..............####################............","......LL.............####################............",".......LL............####################............","........LL...........##...###....###..###............",".........LL..........##...###....###..###............",".........LLLLLLLL....##...###....###..###............","...........LLLLLLL...##...###....###..###............",".....................##...###....###..###............",".....................##...##......#....#.............",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","...................#####################.............","..................######################.............","................########################.............","...............#########################.............","..............#####ooo########oo########.............","..............#####ooo########oo########.............","..............#####ooo########oo########.............","..............######o#########oo########.............","..............##########################.............","..............##########################.............","...................#####################.............","...............#########################.............",".....LL.......##########################.............",".....LLL......##########################.............",".......LL.....########..###.....###..###.............",".......LLL....########..###.....###..###.............","........LLL...#########.####....###..####............",".........LLL..#########..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","......................########oo########.............","...................#####################.............","...............#########################.............","...............#########################.............",".....LL.......##########################.............","......LL......##########################.............",".......LL.....##########################.............","........LL....##########################.............",".........LL........################..###.............",".........LLLLLLLL..####.####....###..####............","...........LLLLLLL..###..####...####..###............","....................###...###....###..###............",".....................##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","................###...########oo########.............","...............#########################.............","...............#########################.............","...............#########################.............","...............#########################.............",".....LL.........########################.............",".....LLL...........#####################.............",".......LL.....##########################.............",".......LLL....#####################..###.............","........LLL...#########.####....###..####............",".........LLL..#########..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","...............####...########oo########.............","..............##########################.............","..............##########################.............","..............##########################.............","..............##########################.............",".....LL.......##########################.............",".....LLL......##########################.............",".......LL......#########################.............",".......LLL.....####################..###.............","........LLL.....#######.####....###..####............",".........LLL........###..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","......................########oo########.............","...................#####################.............","...............#########################.............","...............#########################.............",".....LL.......##########################.............","......LL......##########################.............",".......LL.....##########################.............","........LL....##########################.............",".........LL........################..###.............",".........LLLLLLLL..####.####....###..####............","...........LLLLLLL..###..####...####..###............","....................###...###....###..###............",".....................##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","................###...########oo########.............","...............#########################.............","...............#########################.............","...............#########################.............","...............#########################.............",".....LL.........########################.............",".....LLL...........#####################.............",".......LL.....##########################.............",".......LLL....#####################..###.............","........LLL...#########.####....###..####............",".........LLL..#########..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","...............####...########oo########.............","..............##########################.............","..............##########################.............","..............##########################.............","..............##########################.............",".....LL.......##########################.............",".....LLL......##########################.............",".......LL......#########################.............",".......LLL.....####################..###.............","........LLL.....#######.####....###..####............",".........LLL........###..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","......................########oo########.............","...................#####################.............","...............#########################.............","...............#########################.............",".....LL.......##########################.............",".....LLL......##########################.............",".......LL.....##########################.............","........LL....##########################.............",".........LL........################..###.............",".........LLLLLLLL..####.####....###..####............","...........LLLLLLL..###..####...####..###............","....................###...###....###..###............",".....................##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","................###...########oo########.............","...............#########################.............","...............#########################.............","...............#########################.............","...............#########################.............",".....LL.........########################.............",".....LLL...........#####################.............",".......LL.....##########################.............",".......LLL....#####################..###.............","........LLL...#########.####....###..####............",".........LLL..#########..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","...............####..#########oo########.............","..............##########################.............","..............##########################.............","..............##########################.............","..............##########################.............",".....LL.......##########################.............",".....LLL......##########################.............",".......LL......#########################.............",".......LLL.....####################..###.............","........LLL.....#######.####....###..####............",".........LLL........###..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............",".....................#########oo########.............","...................#####################.............","...............#########################.............","...............#########################.............",".....LL.......##########################.............",".....LLL......##########################.............",".......LL.....##########################.............","........LL....##########################.............",".........LL........################..###.............",".........LLLLLLLL..####.####....###..####............","...........LLLLLLL..###..####...####..###............","....................###...###....###..###............",".....................##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","................###..#########oo########.............","...............#########################.............","...............#########################.............","...............#########################.............","...............#########################.............",".....LL.........########################.............",".....LLL...........#####################.............",".......LL.....##########################.............",".......LLL....#####################..###.............","........LLL...#########.####....###..####............",".........LLL..#########..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","...............####..#########oo########.............","..............##########################.............","..............##########################.............","..............##########################.............","..............##########################.............",".....LL.......##########################.............",".....LLL......##########################.............",".......LL......#########################.............",".......LLL.....####################..###.............","........LLL.....#######.####....###..####............",".........LLL........###..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","......................########oo########.............","...................#####################.............","...............#########################.............","...............#########################.............",".....LL.......##########################.............","......LL......##########################.............",".......LL.....##########################.............","........LL....##########################.............",".........LL........################..###.............",".........LLLLLLLL..####.####....###..####............","...........LLLLLLL..###..####...####..###............","....................###...###....###..###............",".....................##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","................###...########oo########.............","...............#########################.............","...............#########################.............","...............#########################.............","...............#########################.............",".....LL........#########################.............",".....LLL...........#####################.............","......LLL.....##########################.............",".......LLL....#####################..###.............","........LLL...#########.####....###..####............",".........LLL..#########..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","...............####...########oo########.............","..............##########################.............","..............##########################.............","..............##########################.............","..............##########################.............",".....LL.......##########################.............",".....LLL......##########################.............","......LLL......#########################.............",".......LLL.....####################..###.............","........LLL.....#######.####....###..####............",".........LLL........###..####...####..###............","..........LLLLLLLL..###...###....###..###............","...........LLLLLLL...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","......................########oo########.............","...................#####################.............","...............#########################.............","...............#########################.............",".....LL.......##########################.............","......LL......##########################.............",".......LL.....##########################.............","........LLL...##########################.............",".........LL........################..###.............",".........LLLLLLLL..####.####....###..####............","...........LLLLLLL..###..####...####..###............","....................###...###....###..###............",".....................##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","................####..########oo########.............","...............#########################.............","...............#########################.............","...............#########################.............","...............#########################.............",".....LL........#########################.............",".....LLL...........#####################.............",".......LL.....##########################.............",".......LLL....#####################..###.............","........LLL...#########.####....###..####............",".........LLL..#########..####...####..###............","..........LLLL#########...###....###..###............","...........LLL.####..##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................####################.............","...................#####################.............","...................#####################.............","...................#####################.............","......................########oo########.............","......................########oo########.............","...............###....########oo########.............","..............##########################.............","..............##########################.............","..............##########################.............","..............##########################.............",".....LL.......##########################.............",".....LLL......##########################.............",".......LL.....##########################.............",".......LLL....#####################..###.............","........LLL...#########.####....###..####............",".........LLL..#########..####...####..###............","..........LLLL#########...###....###..###............","...........LLL.###...##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................#####################............","....................#####################............",".................########################............","................#########################............","...............######oo########ooo#######............","...............######oo########ooo#######............","...............######oo########ooo#######............","......LLL......######oo#########o########............",".......LL......##########################............","........LL......#########################............",".........LLL......#######################............","..........LL....#########################............","..........LLL..##########################............","............LLL##########################............","..............#########.###.....###..###.............","..............#########.###.....###..###.............","..............#########.####....###..####............","..............#########..####...####..###............","....................###...###....###..###............",".....................##...##......#..................",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................#####################..........",".......................####################..........",".........................##########oo######..........",".........................##########oo######..........",".................LL##########################........","................LL###########################........","..............LLL############################........","............LLL##############################........","............LL###############################........","............LL#############################..........","............LLL############################..........","............LLLLLLLLL######################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................#########################......","......................##########################.....","......................##########################.....","......................###oo###########oo########.....","......................##ooo###########oo########.....","......................###oo###########oo#######......",".....................######################..........","..................#########################..........","..................#########################..........","..................#########################..........","..................#########################..........","...................########################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................###oo###########oo###..........","......................##ooo###########oo###..........","......................###oo###########oo###..........","......................#####################..........",".................###############################.....",".................###############################.....",".................###############################.....",".................###############################.....",".................###############################.....",".....................######################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","......................#####################..........","......................#####################..........","......................###oo###########oo###..........","......................##ooo###########oo###..........",".....................####oo###########oo###..........",".................###############################.....",".................###############################.....",".................###############################.....",".................###############################.....",".................###############################.....","......................#####################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................#####################..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........","......................###..###.....###..###..........",".......................#....#......##....#...........",".....................................................",".....................................................","....................................................."]]},{"name":"duruslar_9","fps":8,"loop":false,"holds":[1,1,1,1,1,1,1,1,1],"frames":[[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".......................#######################.......",".......................#######################.......",".......................##ooo############ooo###.......",".......................##oooo###########ooo###.......",".......................##oooo###########ooo###.......","......................###ooo############ooo###.......",".................##################################..",".................##################################..",".................##################################..",".................##################################..",".................##################################..",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##...###......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................############################..",".......................############################..",".......................############################..",".......................##oooo######################..",".......................##oooo#########ooooo########..",".......................##oooo#########ooooo########..","..................############################.......","..................############################.......","..................############################.......","..................############################.......","....................##########################.......","....................##########################.......",".......................#######################.......",".......................#######################.......",".......................###..###......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","...................LL................................","..................LLL................................","...............LLLLLL................................","...........LLLLLLL...................................","...........LLLLLLL...................................","...........LLLL........#######################.......","...........LLLLLLLLLL..#######################.......","......................###ooo############ooo###.......",".................########oooo###########ooo###.......",".................########oooo###########ooo###.......",".................########ooo############ooo###.......",".................#############################.......",".................##################################..","..................#################################..","...................################################..","....................###############################..",".......................############################..",".......................############################..",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##...###......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".....................................................","....................................................."],[".....................................................",".....................................................",".............L.......................................",".............L.......................................",".............L.......................................",".............L.......................................",".............L.......................................",".............L.......................................",".............L.......................................",".............LLLLLLLL................................",".................#####...............................",".................#####...............................",".................#############################.......",".................#############################.......",".................########ooo############ooo###.......",".................########oooo###########ooo###.......",".......................##oooo###########ooo###.......",".......................##ooo############ooo###.......",".......................#######################.......",".......................############################..",".......................############################..",".......................############################..",".......................############################..",".......................############################..",".......................############################..",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##...###......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................##oooo###########ooo########..","......................###oooo###########ooo########..",".................########oooo###########ooo########..",".................##################################..",".................##################################..",".................##################################..",".................#############################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......","..LLL..................##....##......###...###.......",".......................##....##......###...###.......",".....LLL...............##...###......###...###.......","........LLL............##....##......###...###.......",".........LL............##....##......###...###.......","..........LLLLLLLL.....##....##......###...###.......",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................#####.........######.............","....................#####.........######.............","....................#####.........######.............","..................#######.........#######............","..................#######################............","..................##########################.........","..................##########################.........","..................##########################.........",".....................#######################.........",".....................#######################.........",".....................#oooo###########ooo####.........",".....................#oooo###########ooo####.........",".....................#oooo###########ooo####.........",".....................#######################.........",".....................#######################.........",".....................#######################.........",".....................#######################.........",".....................#######################.........",".....................#######################.........","....L................#######################.........","....LL...............#######################.........","....LL...............#######################.........",".....LLL.............#######################.........",".......LL............###...###......##....##.........","........L............###...###......##....##.........","........LLL..........###...###......##....##.........","..........LLLLLLLL...###...###......##....##.........",".....................###...###......##....##.........",".....................###...###......##....##.........",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................#######################..........","....................#######################..........","....................#######################..........","....................#######################..........",".......................########ooo#########..........",".......................########ooo#########..........",".......................########ooo#########..........","...............############################..........","...............############################..........","...............############################..........","...............############################..........","....L..........############################..........","....L...........###########################..........","....LL..............#######################..........",".....LLL......#############################..........","......LL......#########..###......###...###..........",".......LL.....########....##......###...###..........","........LLL...##########..####....####..####.........",".........LL..........###...###.....###...###.........","..........LLLLLLLL...###...###......##....##.........",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................","....................#######################..........","....................#######################..........","....................#######################..........","....................#######################..........",".......................########ooo#########..........",".......................########ooo#########..........",".......................########ooo#########..........","....................#######################..........","................###########################..........","...............############################..........","....L.........#############################..........","....LL........#############################..........","....LL........#############################..........",".....LLL......#############################..........",".......LL.....#############################..........","........L...........###..###......###...###..........","........LLL.........##....##......###...###..........","..........LLLLLLLL..####..####....####..####.........",".....................###...###.....###...###.........",".....................###...###......##....##.........",".....................................................","....................................................."],[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................############################..",".......................############################..",".......................############################..",".......................##oooo###########ooo########..",".......................##oooo###########ooo########..",".......................##oooo###########ooo########..",".......................#######################.......","...................###########################.......","..................############################.......","..................############################.......","..................############################.......","...................###########################.......","....................##########################.......",".......................#######################.......",".......................###..###......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".....................................................","....................................................."]]},{"name":"idle","fps":4,"loop":true,"holds":[1],"frames":[[".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".....................................................",".......................#######################.......",".......................#######################.......",".......................##ooo############ooo###.......",".......................##oooo###########ooo###.......",".......................##oooo###########ooo###.......","......................###ooo############ooo###.......",".................##################################..",".................##################################..",".................##################################..",".................##################################..",".................##################################..",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................#######################.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".......................##...###......###...###.......",".......................##....##......###...###.......",".......................##....##......###...###.......",".....................................................","....................................................."]]}]};
+let W = REF.w, H = REF.h;
+const PAL_VARSAYILAN = { "#":"#D87656", "o":"#2B2A26", "L":"#8B8B8B" };
+let PAL = { ...PAL_VARSAYILAN };
+const KEY = "clawd-lab-v2";
+
+// ---------- durum ----------
+const blank = () => Array.from({length:H}, () => ".".repeat(W));
+const clone = a => a.slice();
+
+const reference = () => JSON.parse(JSON.stringify(REF));
+let doc = load() || reference();
+W = doc.w || REF.w; H = doc.h || REF.h;
+PAL = { ...PAL_VARSAYILAN, ...(doc.palette || {}) };
+let ai = 0, fi = 0;
+let tool = "#";
+let onionOn = true, guideOn = true, playing = false, bg = "dark", fmt = "grid";
+let mode = "paint";          // "paint" | "select"
+let sel = null;              // {x0,y0,x1,y1} hucre cinsinden, normalize
+let clip = null;             // {w,h,rows:[...]}
+let railFrom = null;         // shift+tik ile kare araligi
+let undoStack = [], redoStack = [];
+
+const anim = () => doc.anims[ai];
+const holds = () => {
+  const a = anim();
+  if(!Array.isArray(a.holds) || a.holds.length !== a.frames.length)
+    a.holds = a.frames.map((_,i) => (a.holds && a.holds[i]) || 1);
+  return a.holds;
+};
+const frame = () => anim().frames[fi];
+
+function load(){
+  try {
+    const raw = localStorage.getItem(KEY);
+    if(!raw) return null;
+    const d = JSON.parse(raw);
+    if(!d || !Array.isArray(d.anims) || !d.anims.length) return null;
+    const dh = d.h || REF.h, dw = d.w || REF.w;
+    for(const a of d.anims){
+      if(!Array.isArray(a.frames) || !a.frames.length) return null;
+      for(const f of a.frames){
+        if(!Array.isArray(f) || f.length !== dh) return null;
+        if(f[0].length !== dw) return null;
+      }
+    }
+    d.w = dw; d.h = dh;
+    return d;
+  } catch(e){ return null; }
+}
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(doc)); } catch(e){ /* özel pencere */ }
+}
+
+// ---------- yardımcılar ----------
+const $ = id => document.getElementById(id);
+const at = (f,x,y) => f[y][x];
+function setPx(f,x,y,ch){
+  if(x<0||y<0||x>=W||y>=H) return f;
+  if(f[y][x] === ch) return f;
+  f[y] = f[y].slice(0,x) + ch + f[y].slice(x+1);
+  return f;
+}
+function pushUndo(){
+  undoStack.push({ai, fi, data: clone(frame())});
+  if(undoStack.length > 60) undoStack.shift();
+  redoStack.length = 0;
+}
+function toast(msg){
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 1600);
+}
+
+// ---------- çizim ----------
+function paint(ctx, f, cell, ox=0, oy=0, alpha=1){
+  ctx.globalAlpha = alpha;
+  for(const [ch,col] of Object.entries(PAL)){
+    ctx.fillStyle = col;
+    for(let y=0;y<H;y++){
+      const row = f[y];
+      let x = 0;
+      while(x < W){
+        if(row[x] === ch){
+          let run = 1;
+          while(x+run < W && row[x+run] === ch) run++;
+          ctx.fillRect(ox + x*cell, oy + y*cell, run*cell, cell);
+          x += run;
+        } else x++;
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+const viewIdx = () => playing ? playIdx : fi;
+
+function drawEditor(){
+  const cell = +$("zoom").value;
+  const c = $("edit");
+  if(c.width !== W*cell || c.height !== H*cell){ c.width = W*cell; c.height = H*cell; }
+  const ctx2 = c.getContext("2d");
+  ctx2.imageSmoothingEnabled = false;
+  ctx2.clearRect(0,0,c.width,c.height);
+  const i = viewIdx();
+
+  // oynatirken sogan zari kapali: hareketi bulandiriyor
+  if(onionOn && !playing && i > 0) paint(ctx2, anim().frames[i-1], cell, 0, 0, .22);
+  paint(ctx2, anim().frames[i], cell);
+
+  if(cell >= 7){
+    ctx2.strokeStyle = "rgba(140,150,165,.16)";
+    ctx2.lineWidth = 1;
+    ctx2.beginPath();
+    for(let x=0;x<=W;x++){ ctx2.moveTo(x*cell+.5,0); ctx2.lineTo(x*cell+.5,H*cell); }
+    for(let y=0;y<=H;y++){ ctx2.moveTo(0,y*cell+.5); ctx2.lineTo(W*cell,y*cell+.5); }
+    ctx2.stroke();
+  }
+  if(guideOn){
+    ctx2.strokeStyle = "rgba(216,118,86,.5)";
+    ctx2.setLineDash([4,4]); ctx2.lineWidth = 1;
+    ctx2.beginPath();
+    const gy = Math.min(H-1,34)*cell + .5, gx = Math.round(W/2)*cell + .5;
+    ctx2.moveTo(0,gy); ctx2.lineTo(W*cell,gy);
+    ctx2.moveTo(gx,0); ctx2.lineTo(gx,H*cell);
+    ctx2.stroke();
+    ctx2.setLineDash([]);
+  }
+  if(sel){
+    const x = sel.x0*cell, y = sel.y0*cell;
+    const w = (sel.x1-sel.x0+1)*cell, h = (sel.y1-sel.y0+1)*cell;
+    ctx2.fillStyle = "rgba(110,155,255,.14)";
+    ctx2.fillRect(x,y,w,h);
+    ctx2.lineWidth = 1;
+    ctx2.strokeStyle = "rgba(255,255,255,.9)";
+    ctx2.setLineDash([]);      ctx2.strokeRect(x+.5,y+.5,w-1,h-1);
+    ctx2.strokeStyle = "#2F6FED";
+    ctx2.setLineDash([4,4]);   ctx2.strokeRect(x+.5,y+.5,w-1,h-1);
+    ctx2.setLineDash([]);
+  }
+}
+
+let railEls = [];
+
+function setActiveRail(i){
+  railEls.forEach((el,k) => el.setAttribute("aria-current", k === i ? "true" : "false"));
+  const c = $("frames"), el = railEls[i];
+  if(!c || !el) return;
+  if(c.scrollHeight > c.clientHeight + 2){
+    const top = el.offsetTop - c.offsetTop;
+    if(top < c.scrollTop || top + el.offsetHeight > c.scrollTop + c.clientHeight)
+      c.scrollTop = top - c.clientHeight/2 + el.offsetHeight/2;
+  } else if(c.scrollWidth > c.clientWidth + 2){
+    const left = el.offsetLeft - c.offsetLeft;
+    if(left < c.scrollLeft || left + el.offsetWidth > c.scrollLeft + c.clientWidth)
+      c.scrollLeft = left - c.clientWidth/2 + el.offsetWidth/2;
+  }
+}
+
+function drawThumbs(){
+  const wrap = $("frames");
+  wrap.textContent = "";
+  railEls = [];
+  anim().frames.forEach((f,i) => {
+    const el = document.createElement("div");
+    el.className = "frame";
+    el.tabIndex = 0;
+    el.setAttribute("aria-current", i === viewIdx() ? "true" : "false");
+    const cv = document.createElement("canvas");
+    const cell = 2;
+    cv.width = W*cell; cv.height = H*cell;
+    paint(cv.getContext("2d"), f, cell);
+    const n = document.createElement("span");
+    n.className = "n"; n.textContent = String(i+1).padStart(2,"0");
+    el.append(n, cv);
+    const hv = holds()[i] || 1;
+    if(hv > 1){
+      const b = document.createElement("span");
+      b.className = "n hold"; b.textContent = "×" + hv;
+      el.append(b);
+    }
+    railEls.push(el);
+    if(railFrom !== null){
+      const a = Math.min(railFrom, fi), b = Math.max(railFrom, fi);
+      if(i >= a && i <= b) el.classList.add("range");
+    }
+    const go = (ev) => {
+      if(playing) stop();
+      if(ev && ev.shiftKey){ railFrom = (railFrom === null) ? fi : railFrom; }
+      else { railFrom = null; }
+      fi = i; render();
+    };
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); go(e); } });
+    wrap.append(el);
+  });
+  $("frameCount").textContent = anim().frames.length + " kare";
+  drawHedefler();
+  const rb = $("rangeToAnim");
+  if(railFrom !== null && railFrom !== fi){
+    const a = Math.min(railFrom, fi), b = Math.max(railFrom, fi);
+    rb.disabled = false;
+    rb.textContent = `${b-a+1} kareyi yeni animasyona`;
+  } else {
+    rb.disabled = true;
+    rb.textContent = "Seçili kareleri yeni animasyona";
+  }
+}
+
+function drawPreview(idx){
+  const s = +$("scale").value;
+  const c = $("preview"), ctx = c.getContext("2d");
+  c.width = W*s; c.height = H*s;
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0,0,c.width,c.height);
+  paint(ctx, anim().frames[idx], s);
+}
+
+function render(){
+  drawEditor(); drawThumbs(); drawPreview(viewIdx()); buildOut();
+  $("playPos").textContent = (viewIdx()+1) + " / " + anim().frames.length;
+  setActiveRail(viewIdx());
+  $("holdVal").textContent = holds()[fi] || 1;
+  updateSelBar();
+  syncPalette();
+  $("undo").disabled = !undoStack.length;
+  $("redo").disabled = !redoStack.length;
+  save();
+}
+
+// ---------- fare ----------
+let painting = false, paintCh = "#";
+function cellFromEvent(e){
+  const cell = +$("zoom").value;
+  const r = $("edit").getBoundingClientRect();
+  return [Math.floor((e.clientX - r.left)/cell), Math.floor((e.clientY - r.top)/cell)];
+}
+let selAnchor = null;
+$("edit").addEventListener("pointerdown", e => {
+  e.preventDefault();
+  $("edit").setPointerCapture(e.pointerId);
+  const [x,y] = cellFromEvent(e);
+  if(mode === "select"){
+    selAnchor = { x:clampCell(x,W), y:clampCell(y,H) };
+    sel = { x0:selAnchor.x, y0:selAnchor.y, x1:selAnchor.x, y1:selAnchor.y };
+    drawEditor(); updateSelBar();
+    return;
+  }
+  pushUndo();
+  painting = true;
+  paintCh = (e.button === 2 || e.shiftKey) ? "." : tool;
+  setPx(frame(),x,y,paintCh); drawEditor();
+});
+$("edit").addEventListener("pointermove", e => {
+  const [x,y] = cellFromEvent(e);
+  $("readout").textContent = (x>=0&&y>=0&&x<W&&y<H) ? `x ${x}  y ${y}  ·  ${W}×${H} ızgara` : "—";
+  if(selAnchor){
+    sel = norm({ x0:selAnchor.x, y0:selAnchor.y,
+                 x1:clampCell(x,W), y1:clampCell(y,H) });
+    drawEditor(); updateSelBar();
+    return;
+  }
+  if(!painting) return;
+  setPx(frame(),x,y,paintCh); drawEditor();
+});
+const endPaint = () => {
+  if(selAnchor){ selAnchor = null; updateSelBar(); return; }
+  if(painting){ painting = false; render(); }
+};
+$("edit").addEventListener("pointerup", endPaint);
+$("edit").addEventListener("pointercancel", endPaint);
+$("edit").addEventListener("pointerleave", () => { $("readout").textContent = "—"; });
+$("edit").addEventListener("contextmenu", e => e.preventDefault());
+
+// ---------- araçlar ----------
+const tools = { "tool-b":"#", "tool-e":"o", "tool-l":"L", "tool-x":"." };
+function setTool(ch){
+  mode = "paint"; tool = ch;
+  for(const [id,c] of Object.entries(tools)) $(id).setAttribute("aria-pressed", String(c === ch));
+  $("tool-s").setAttribute("aria-pressed","false");
+  $("edit").classList.remove("sel");
+}
+function setSelectMode(){
+  mode = "select";
+  for(const id of Object.keys(tools)) $(id).setAttribute("aria-pressed","false");
+  $("tool-s").setAttribute("aria-pressed","true");
+  $("edit").classList.add("sel");
+}
+for(const [id,ch] of Object.entries(tools)) $(id).addEventListener("click", () => setTool(ch));
+$("tool-s").addEventListener("click", setSelectMode);
+
+// ---------- secim ----------
+const clampCell = (v,max) => Math.max(0, Math.min(max-1, v));
+function norm(a){
+  return { x0:Math.min(a.x0,a.x1), y0:Math.min(a.y0,a.y1),
+           x1:Math.max(a.x0,a.x1), y1:Math.max(a.y0,a.y1) };
+}
+function selSize(){ return sel ? [sel.x1-sel.x0+1, sel.y1-sel.y0+1] : [0,0]; }
+function updateSelBar(){
+  const on = !!sel;
+  $("selbar").classList.toggle("on", on);
+  if(on){
+    const [w,h] = selSize();
+    $("selInfo").textContent = `${w}×${h} hücre` + (clip ? `  ·  panoda ${clip.w}×${clip.h}` : "");
+  }
+  $("pasteBtn").disabled = !clip;
+  $("pasteAllBtn").disabled = !clip;
+}
+function copySel(cut){
+  if(!sel) return;
+  const f = frame(), rows = [];
+  for(let y=sel.y0;y<=sel.y1;y++) rows.push(f[y].slice(sel.x0, sel.x1+1));
+  const [w,h] = selSize();
+  clip = { w, h, rows };
+  if(cut){
+    pushUndo();
+    for(let y=sel.y0;y<=sel.y1;y++)
+      for(let x=sel.x0;x<=sel.x1;x++) setPx(f,x,y,".");
+  }
+  render(); toast(cut ? "Kesildi" : "Kopyalandı");
+}
+function pasteInto(f, ox, oy){
+  for(let y=0;y<clip.h;y++)
+    for(let x=0;x<clip.w;x++){
+      const ch = clip.rows[y][x];
+      if(ch !== ".") setPx(f, ox+x, oy+y, ch);
+    }
+}
+function pasteSel(all){
+  if(!clip) return;
+  const ox = sel ? sel.x0 : 0, oy = sel ? sel.y0 : 0;
+  pushUndo();
+  if(all){
+    for(const f of anim().frames) pasteInto(f, ox, oy);
+    undoStack.length = 0;   // cok kareli islem geri alinamaz
+    toast(anim().frames.length + " kareye yapıştırıldı");
+  } else {
+    pasteInto(frame(), ox, oy);
+    toast("Yapıştırıldı");
+  }
+  render();
+}
+function clearSel(){
+  if(!sel) return;
+  pushUndo();
+  const f = frame();
+  for(let y=sel.y0;y<=sel.y1;y++)
+    for(let x=sel.x0;x<=sel.x1;x++) setPx(f,x,y,".");
+  render();
+}
+function moveSel(dx,dy){
+  if(!sel || !clip) { nudge(dx,dy); return; }
+  pushUndo();
+  const f = frame();
+  for(let y=sel.y0;y<=sel.y1;y++)
+    for(let x=sel.x0;x<=sel.x1;x++) setPx(f,x,y,".");
+  sel = norm({ x0:clampCell(sel.x0+dx,W), y0:clampCell(sel.y0+dy,H),
+               x1:clampCell(sel.x1+dx,W), y1:clampCell(sel.y1+dy,H) });
+  pasteInto(f, sel.x0, sel.y0);
+  render();
+}
+$("copyBtn").onclick     = () => copySel(false);
+$("cutBtn").onclick      = () => copySel(true);
+$("pasteBtn").onclick    = () => pasteSel(false);
+$("pasteAllBtn").onclick = () => pasteSel(true);
+$("clearSelBtn").onclick = clearSel;
+$("dropSelBtn").onclick  = () => { sel = null; render(); };
+$("selAllBtn").onclick   = () => { sel = {x0:0,y0:0,x1:W-1,y1:H-1}; setSelectMode(); render(); };
+
+function nudge(dx,dy){
+  pushUndo();
+  const src = clone(frame()), out = blank();
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const ch = src[y][x];
+    if(ch !== ".") setPx(out, x+dx, y+dy, ch);
+  }
+  anim().frames[fi] = out; render();
+}
+$("nL").onclick = () => nudge(-1,0);
+$("nR").onclick = () => nudge(1,0);
+$("nU").onclick = () => nudge(0,-1);
+$("nD").onclick = () => nudge(0,1);
+$("mirror").onclick = () => {
+  pushUndo();
+  anim().frames[fi] = frame().map(r => [...r].reverse().join(""));
+  render();
+};
+$("clear").onclick = () => { pushUndo(); anim().frames[fi] = blank(); render(); };
+
+$("undo").onclick = () => {
+  const s = undoStack.pop(); if(!s) return;
+  redoStack.push({ai, fi, data: clone(doc.anims[s.ai].frames[s.fi])});
+  doc.anims[s.ai].frames[s.fi] = s.data; ai = s.ai; fi = s.fi; render();
+};
+$("redo").onclick = () => {
+  const s = redoStack.pop(); if(!s) return;
+  undoStack.push({ai, fi, data: clone(doc.anims[s.ai].frames[s.fi])});
+  doc.anims[s.ai].frames[s.fi] = s.data; ai = s.ai; fi = s.fi; render();
+};
+
+// ---------- kareler ----------
+$("fAdd").onclick  = () => { const hs = holds(); anim().frames.splice(fi+1,0,blank()); hs.splice(fi+1,0,1); fi++; undoStack.length = 0; render(); };
+$("fDup").onclick  = () => { const hs = holds(); anim().frames.splice(fi+1,0,clone(frame())); hs.splice(fi+1,0,hs[fi]); fi++; undoStack.length = 0; render(); };
+$("fDel").onclick  = () => {
+  if(anim().frames.length < 2){ toast("Son kare silinemez"); return; }
+  const hs = holds();
+  anim().frames.splice(fi,1); hs.splice(fi,1);
+  fi = Math.min(fi, anim().frames.length-1);
+  undoStack.length = 0; render();
+};
+const swap = d => {
+  const j = fi + d; if(j < 0 || j >= anim().frames.length) return;
+  const fr = anim().frames, hs = holds();
+  [fr[fi], fr[j]] = [fr[j], fr[fi]];
+  [hs[fi], hs[j]] = [hs[j], hs[fi]];
+  fi = j; undoStack.length = 0; render();
+};
+$("holdDn").onclick = () => { const hs = holds(); hs[fi] = Math.max(1, hs[fi]-1); render(); };
+$("holdUp").onclick = () => { const hs = holds(); hs[fi] = Math.min(99, hs[fi]+1); render(); };
+$("fUp").onclick = () => swap(-1);
+$("fDown").onclick = () => swap(1);
+
+// ---------- animasyonlar ----------
+function fillAnimSel(){
+  const s = $("animSel");
+  s.textContent = "";
+  doc.anims.forEach((a,i) => {
+    const o = document.createElement("option");
+    o.value = i; o.textContent = a.name;
+    s.append(o);
+  });
+  s.value = ai;
+  drawPresets();
+  drawHedefler();
+}
+$("animSel").onchange = e => {
+  if(playing) stop();
+  ai = +e.target.value; fi = 0; undoStack.length = 0;
+  $("fps").value = anim().fps; $("fpsVal").textContent = anim().fps;
+  $("loop").setAttribute("aria-pressed", String(!!anim().loop));
+  render();
+};
+$("animAdd").onclick = () => {
+  const name = prompt("Animasyon adı", "yeni_poz");
+  if(!name) return;
+  doc.anims.push({ name, fps:8, loop:true, frames:[blank()], holds:[1] });
+  ai = doc.anims.length-1; fi = 0; undoStack.length = 0;
+  fillAnimSel(); render();
+};
+$("animRename").onclick = () => {
+  const name = prompt("Yeni ad", anim().name);
+  if(!name) return;
+  anim().name = name; fillAnimSel(); render();
+};
+const HAZIR_ADLAR = ["idle","laptop_out","typing","laptop_away","waiting_in","waiting","waiting_out"];
+
+// ---------- kareleri hedef animasyona gonder ----------
+// Ekran adi insan dilinde, JSON adi sabit kalir -- eklenti o adlari ariyor.
+// Her grupta ORTADAKI donguye girer, yandakiler bir kez oynar.
+const HEDEF_GRUPLARI = [
+  { baslik:"Laptop", kutular:[
+      { ad:"laptop_out",  etiket:"laptop çıkar", dongu:false },
+      { ad:"typing",      etiket:"kod yaz",      dongu:true  },
+      { ad:"laptop_away", etiket:"laptop kapat", dongu:false },
+  ]},
+  { baslik:"Bekleme", kutular:[
+      { ad:"waiting_in",  etiket:"çök",   dongu:false },
+      { ad:"waiting",     etiket:"bekle", dongu:true  },
+      { ad:"waiting_out", etiket:"uyan",  dongu:false },
+  ]},
+  { baslik:"Boşta", kutular:[
+      { ad:"idle", etiket:"boşta dur", dongu:true },
+  ]},
+];
+let gonderGecmisi = [];   // {ad, kac} — son gondermeyi geri almak icin
+let copKutusu = null;     // son silinen animasyon, geri getirmek icin
+
+// Bir bolme YALNIZCA Gonder yarattiysa silinebilir. Kullanicinin kendi cizdigi
+// bir animasyon ayni ada sahipse (orn. "waiting") ona ASLA dokunulmaz --
+// bu hata bir kez yasandi ve elle cizilmis 19 kareyi silmisti.
+function kutuMu(ad){
+  return Array.isArray(doc.kutular) && doc.kutular.includes(ad);
+}
+function kutuIsaretle(ad){
+  if(!Array.isArray(doc.kutular)) doc.kutular = [];
+  if(!doc.kutular.includes(ad)) doc.kutular.push(ad);
+}
+
+function secimAraligi(){
+  if(railFrom !== null && railFrom !== fi){
+    const a = Math.min(railFrom, fi), b = Math.max(railFrom, fi);
+    return [a, b];
+  }
+  return [fi, fi];
+}
+
+function hedefeGonder(ad){
+  const [a,b] = secimAraligi();
+  const src = anim(), hs = holds();
+  const kareler = src.frames.slice(a, b+1).map(f => f.slice());
+  const tutmalar = hs.slice(a, b+1);
+
+  let hedef = doc.anims.find(x => x.name === ad);
+
+  // Ad cakismasi: bu adda ZATEN kullanicinin kendi animasyonu varsa dokunma.
+  if(hedef && !kutuMu(ad)){
+    const yeniAd = ad + "_ham";
+    const ok = confirm(
+      `"${ad}" adında kendi animasyonun var (${hedef.frames.length} kare).\n\n` +
+      `Bu bölme de aynı adı kullanıyor, üzerine yazamam.\n\n` +
+      `TAMAM: senin animasyonunu "${yeniAd}" olarak yeniden adlandırayım, ` +
+      `bölme boştan başlasın.\nİPTAL: hiçbir şey yapma.`);
+    if(!ok) return;
+    hedef.name = yeniAd;
+    if(doc.anims.find(x => x.name === src.name) === hedef) { /* kaynak yeniden adlandirildi */ }
+    hedef = null;
+  }
+
+  if(!hedef){
+    let dongu = false;
+    for(const g of HEDEF_GRUPLARI)
+      for(const k of g.kutular) if(k.ad === ad) dongu = k.dongu;
+    hedef = { name:ad, fps:src.fps, loop:dongu, frames:[], holds:[] };
+    doc.anims.push(hedef);
+    kutuIsaretle(ad);
+  }
+  if(!Array.isArray(hedef.holds)) hedef.holds = hedef.frames.map(()=>1);
+  hedef.frames.push(...kareler);
+  hedef.holds.push(...tutmalar);
+
+  gonderGecmisi.push({ ad, kac: kareler.length });
+  fillAnimSel(); $("animSel").value = ai;
+  render();
+  toast(`${kareler.length} kare → ${ad} (${hedef.frames.length})`);
+}
+
+function drawHedefler(){
+  const box = $("hedefler"); box.textContent = "";
+  for(const g of HEDEF_GRUPLARI){
+    const bas = document.createElement("p");
+    bas.className = "eyebrow";
+    bas.style.cssText = "margin:8px 0 4px;font-size:9px";
+    bas.textContent = g.baslik;
+    box.append(bas);
+
+    const sira = document.createElement("div");
+    sira.className = "chips";
+    for(const k of g.kutular){
+      const h = doc.anims.find(x => x.name === k.ad);
+      const n = h ? h.frames.length : 0;
+      const benim = h && !kutuMu(k.ad);      // kullanicinin kendi animasyonu
+      const b = document.createElement("button");
+      b.className = "chip hedef" + (n ? "" : " bos");
+      b.append(document.createTextNode(k.etiket + (k.dongu ? " ↻" : "")));
+      const cnt = document.createElement("b");
+      cnt.textContent = benim ? "senin" : n;
+      b.append(cnt);
+      b.title = benim
+        ? `"${k.ad}" adında kendi animasyonun var — bu bölme onu göstermiyor, dokunulmadı`
+        : (k.dongu
+          ? `${k.ad} — DÖNGÜ: bu klip sürekli tekrar eder`
+          : `${k.ad} — bir kez oynar, sonra döngüye geçer`);
+      b.onclick = () => hedefeGonder(k.ad);
+      if(n && !benim){
+        const x = document.createElement("span");
+        x.className = "bosalt"; x.textContent = "×";
+        x.title = `"${k.etiket}" bölmesini boşalt`;
+        x.onclick = (ev) => { ev.stopPropagation(); hedefBosalt(k.ad, k.etiket); };
+        b.append(x);
+      }
+      sira.append(b);
+    }
+    box.append(sira);
+  }
+  const ozel = document.createElement("button");
+  ozel.className = "chip"; ozel.style.marginTop = "8px";
+  ozel.textContent = "+ başka";
+  ozel.title = "Kendi adını yaz";
+  ozel.onclick = () => { const ad = prompt("Hedef animasyon adı"); if(ad) hedefeGonder(ad); };
+  box.append(ozel);
+
+  const [a,b2] = secimAraligi();
+  $("gonderKac").textContent = (b2 > a) ? `· ${b2-a+1} kare seçili` : "· 1 kare";
+  $("gonderGeri").disabled = !gonderGecmisi.length;
+  const cg = $("copGeri");
+  cg.disabled = !copKutusu;
+  cg.textContent = copKutusu
+    ? `Geri getir: ${copKutusu.anim.name} (${copKutusu.anim.frames.length})`
+    : "Geri getir";
+}
+
+function hedefKaldir(ad){
+  if(!kutuMu(ad)) return 0;                 // sahibi Gonder degilse asla silme
+  const i = doc.anims.findIndex(x => x.name === ad);
+  if(i < 0) return 0;
+  const aktifAd = doc.anims[ai] ? doc.anims[ai].name : null;
+  const silinen = doc.anims[i];
+  const kac = silinen.frames.length;
+
+  copKutusu = { anim: JSON.parse(JSON.stringify(silinen)), yer: i, kutu: true };
+  doc.anims.splice(i, 1);
+  doc.kutular = doc.kutular.filter(x => x !== ad);
+  gonderGecmisi = gonderGecmisi.filter(g => g.ad !== ad);
+
+  if(!doc.anims.length)
+    doc.anims.push({ name:"yeni", fps:8, loop:true, frames:[blank()], holds:[1] });
+
+  const yeni = doc.anims.findIndex(x => x.name === aktifAd);
+  ai = yeni >= 0 ? yeni : Math.min(i, doc.anims.length - 1);
+  fi = 0; railFrom = null; undoStack.length = 0; redoStack.length = 0;
+  return kac;
+}
+
+function copGeriGetir(){
+  if(!copKutusu) return;
+  const yer = Math.min(copKutusu.yer, doc.anims.length);
+  doc.anims.splice(yer, 0, copKutusu.anim);
+  if(copKutusu.kutu) kutuIsaretle(copKutusu.anim.name);
+  const ad = copKutusu.anim.name, kac = copKutusu.anim.frames.length;
+  copKutusu = null;
+  ai = yer; fi = 0; railFrom = null;
+  fillAnimSel(); $("animSel").value = ai;
+  $("fps").value = anim().fps; $("fpsVal").textContent = anim().fps;
+  $("loop").setAttribute("aria-pressed", String(!!anim().loop));
+  render();
+  toast(`"${ad}" geri getirildi (${kac} kare)`);
+}
+
+function hedefBosalt(ad, etiket){
+  const h = doc.anims.find(x => x.name === ad);
+  if(!h) return;
+  if(!kutuMu(ad)){
+    alert(`"${ad}" senin kendi animasyonun, bir bölme değil.\n\n` +
+          `Buradan silinemez. Gerçekten silmek istiyorsan animasyon ` +
+          `listesinden seçip oradaki ✕ ile sil.`);
+    return;
+  }
+  if(!confirm(`"${etiket}" bölmesindeki ${h.frames.length} kare silinecek.\n\n` +
+              `"Geri getir" ile geri alabilirsin.`)) return;
+  const kac = hedefKaldir(ad);
+  fillAnimSel(); $("animSel").value = ai;
+  $("fps").value = anim().fps; $("fpsVal").textContent = anim().fps;
+  $("loop").setAttribute("aria-pressed", String(!!anim().loop));
+  render();
+  toast(`"${etiket}" boşaltıldı (${kac} kare)`);
+}
+
+$("hepsiniSifirla").onclick = () => {
+  const dolu = [];
+  for(const g of HEDEF_GRUPLARI)
+    for(const k of g.kutular){
+      const h = doc.anims.find(x => x.name === k.ad);
+      if(h && kutuMu(k.ad)) dolu.push({ ...k, n:h.frames.length });
+    }
+  if(!dolu.length){ toast("Zaten hepsi boş"); return; }
+  const liste = dolu.map(k => `  · ${k.etiket} (${k.n} kare)`).join("\n");
+  if(!confirm(`Bu bölmeler sıfırlanacak:\n\n${liste}\n\n` +
+              `Kendi çizdiğin animasyonlara dokunulmaz.`)) return;
+  let toplam = 0;
+  for(const k of dolu) toplam += hedefKaldir(k.ad);
+  fillAnimSel(); $("animSel").value = ai;
+  $("fps").value = anim().fps; $("fpsVal").textContent = anim().fps;
+  $("loop").setAttribute("aria-pressed", String(!!anim().loop));
+  render();
+  toast(`${dolu.length} bölme sıfırlandı (${toplam} kare)`);
+};
+
+$("copGeri").onclick = copGeriGetir;
+
+$("gonderGeri").onclick = () => {
+  const son = gonderGecmisi.pop();
+  if(!son) return;
+  const h = doc.anims.find(x => x.name === son.ad);
+  if(h){
+    h.frames.splice(-son.kac);
+    if(Array.isArray(h.holds)) h.holds.splice(-son.kac);
+    if(!h.frames.length){
+      const i = doc.anims.indexOf(h);
+      doc.anims.splice(i,1);
+      if(ai >= doc.anims.length) ai = doc.anims.length-1;
+      if(ai === i) fi = 0;
+    }
+  }
+  fillAnimSel(); $("animSel").value = Math.min(ai, doc.anims.length-1);
+  render();
+  toast(`${son.kac} kare geri alındı (${son.ad})`);
+};
+function drawPresets(){
+  const box = $("presets"); box.textContent = "";
+  const mevcut = new Set(doc.anims.map(a => a.name));
+  for(const ad of HAZIR_ADLAR){
+    const b = document.createElement("button");
+    b.className = "chip" + (mevcut.has(ad) ? " has" : "");
+    b.textContent = ad;
+    b.title = mevcut.has(ad) ? "Bu animasyona geç" : "Bu adla boş animasyon ekle";
+    b.onclick = () => {
+      if(playing) stop();
+      const i = doc.anims.findIndex(a => a.name === ad);
+      if(i >= 0){ ai = i; }
+      else {
+        doc.anims.push({ name:ad, fps:8, loop:(ad==="idle"||ad==="typing"||ad==="wave"||ad==="sleep"),
+                         frames:[blank()], holds:[1] });
+        ai = doc.anims.length - 1;
+      }
+      fi = 0; railFrom = null; undoStack.length = 0;
+      fillAnimSel(); $("animSel").value = ai;
+      $("fps").value = anim().fps; $("fpsVal").textContent = anim().fps;
+      $("loop").setAttribute("aria-pressed", String(!!anim().loop));
+      render();
+    };
+    box.append(b);
+  }
+}
+
+$("animDup").onclick = () => {
+  const src = anim();
+  const name = prompt("Kopyanın adı", src.name + "_kopya");
+  if(!name) return;
+  doc.anims.push({ name, fps:src.fps, loop:src.loop,
+                   frames: src.frames.map(f => f.slice()),
+                   holds: holds().slice() });
+  ai = doc.anims.length - 1; fi = 0; railFrom = null; undoStack.length = 0;
+  fillAnimSel(); $("animSel").value = ai; render();
+  toast("Çoğaltıldı");
+};
+
+$("rangeToAnim").onclick = () => {
+  if(railFrom === null || railFrom === fi) return;
+  const a = Math.min(railFrom, fi), b = Math.max(railFrom, fi);
+  const name = prompt(`${b-a+1} kare için yeni animasyon adı`, "");
+  if(!name) return;
+  const src = anim(), hs = holds();
+  doc.anims.push({ name, fps:src.fps, loop:false,
+                   frames: src.frames.slice(a, b+1).map(f => f.slice()),
+                   holds: hs.slice(a, b+1) });
+  ai = doc.anims.length - 1; fi = 0; railFrom = null; undoStack.length = 0;
+  fillAnimSel(); $("animSel").value = ai;
+  $("loop").setAttribute("aria-pressed","false");
+  render();
+  toast(`${b-a+1} kare "${name}" olarak kopyalandı`);
+};
+
+$("animDel").onclick = () => {
+  if(doc.anims.length < 2){ toast("Son animasyon silinemez"); return; }
+  const a = anim();
+  if(!confirm(`"${a.name}" animasyonu silinecek (${a.frames.length} kare).\n\n` +
+              `"Geri getir" ile geri alabilirsin.`)) return;
+  copKutusu = { anim: JSON.parse(JSON.stringify(a)), yer: ai, kutu: kutuMu(a.name) };
+  doc.anims.splice(ai,1);
+  doc.kutular = (doc.kutular||[]).filter(x => x !== a.name);
+  ai = 0; fi = 0; railFrom = null; undoStack.length = 0;
+  fillAnimSel(); render();
+  toast(`"${a.name}" silindi — geri getirilebilir`);
+};
+
+// ---------- oynatma ----------
+let playIdx = 0, lastT = 0, raf = 0;
+function showPlayFrame(){
+  drawPreview(playIdx);
+  drawEditor();
+  setActiveRail(playIdx);
+  $("playPos").textContent = (playIdx+1) + " / " + anim().frames.length;
+}
+function tick(t){
+  if(!playing) return;
+  const step = 1000 / anim().fps * Math.max(1, holds()[playIdx] || 1);
+  if(t - lastT >= step){
+    lastT = t;
+    playIdx++;
+    if(playIdx >= anim().frames.length){
+      if(anim().loop) playIdx = 0;
+      else { playIdx = anim().frames.length-1; stop(); return; }
+    }
+    showPlayFrame();
+  }
+  raf = requestAnimationFrame(tick);
+}
+function stop(){
+  if(!playing) return;
+  playing = false;
+  cancelAnimationFrame(raf);
+  $("play").textContent = "▶ Oynat";
+  $("play").classList.remove("on");
+  // durdugu karede kal: dogrudan duzenlemeye gecebilesin
+  fi = Math.max(0, Math.min(playIdx, anim().frames.length-1));
+  render();
+}
+function start(){
+  playing = true;
+  // secili kareden devam et; sondaysan bastan al
+  playIdx = (fi >= anim().frames.length - 1) ? 0 : fi;
+  lastT = 0;
+  $("play").textContent = "⏸ Duraklat";
+  $("play").classList.add("on");
+  showPlayFrame();
+  raf = requestAnimationFrame(tick);
+}
+$("play").onclick = () => playing ? stop() : start();
+$("loop").onclick = () => {
+  anim().loop = !anim().loop;
+  $("loop").setAttribute("aria-pressed", String(anim().loop));
+  save();
+};
+$("fps").oninput = e => { anim().fps = +e.target.value; $("fpsVal").textContent = e.target.value; save(); };
+$("scale").oninput = e => { $("scaleVal").textContent = e.target.value; drawPreview(playing ? playIdx : fi); };
+$("zoom").oninput = drawEditor;
+
+for(const [id,name] of [["bgD","dark"],["bgL","light"],["bgC","check"]]){
+  $(id).onclick = () => {
+    bg = name;
+    $("previewBox").className = "preview-box bg-" + name;
+    $("canvasWrap").style.background = name === "light" ? "var(--canvas-light)" : "var(--canvas-dark)";
+    for(const o of ["bgD","bgL","bgC"]) $(o).setAttribute("aria-pressed", String(o === id));
+  };
+}
+const PAL_INPUTS = { "#":"palBody", "o":"palEye", "L":"palLaptop" };
+function syncPalette(){
+  for(const [ch,id] of Object.entries(PAL_INPUTS)) $(id).value = PAL[ch];
+  for(const [id,ch] of Object.entries(tools)){
+    const sw = $(id).querySelector(".swatch");
+    if(sw && PAL[ch]) sw.style.background = PAL[ch];
+  }
+}
+for(const [ch,id] of Object.entries(PAL_INPUTS)){
+  $(id).addEventListener("input", e => {
+    PAL[ch] = e.target.value;
+    doc.palette = { ...PAL };
+    render();
+  });
+}
+$("palReset").onclick = () => {
+  PAL = { ...PAL_VARSAYILAN };
+  doc.palette = { ...PAL };
+  render(); toast("Palet varsayılana döndü");
+};
+
+$("onion").onclick = () => { onionOn = !onionOn; $("onion").setAttribute("aria-pressed", String(onionOn)); drawEditor(); };
+$("guide").onclick = () => { guideOn = !guideOn; $("guide").setAttribute("aria-pressed", String(guideOn)); drawEditor(); };
+
+// ---------- dışa aktarma ----------
+function runsOf(f){
+  const out = [];
+  for(let y=0;y<H;y++){
+    let x = 0;
+    while(x < W){
+      const ch = f[y][x];
+      if(ch === "."){ x++; continue; }
+      let run = 1;
+      while(x+run < W && f[y][x+run] === ch) run++;
+      out.push([x,y,run,ch]);
+      x += run;
+    }
+  }
+  return out;
+}
+function buildOut(){
+  const base = { w:W, h:H, palette:{ ...PAL } };
+  const payload = fmt === "grid"
+    ? { ...base, format:"grid", animations: doc.anims.map(a => ({ name:a.name, fps:a.fps, loop:a.loop, holds:a.holds || a.frames.map(()=>1), frames:a.frames })) }
+    : { ...base, format:"runs", animations: doc.anims.map(a => ({ name:a.name, fps:a.fps, loop:a.loop, holds:a.holds || a.frames.map(()=>1), frames:a.frames.map(runsOf) })) };
+  $("out").value = JSON.stringify(payload, null, 1);
+}
+$("fmtGrid").onclick = () => { fmt = "grid"; $("fmtGrid").setAttribute("aria-pressed","true"); $("fmtRuns").setAttribute("aria-pressed","false"); buildOut(); };
+$("fmtRuns").onclick = () => { fmt = "runs"; $("fmtRuns").setAttribute("aria-pressed","true"); $("fmtGrid").setAttribute("aria-pressed","false"); buildOut(); };
+$("copy").onclick = async () => {
+  const ta = $("out");
+  try { await navigator.clipboard.writeText(ta.value); toast("JSON panoya kopyalandı"); }
+  catch(e){ ta.select(); toast("Metni seçtim — Ctrl+C"); }
+};
+function adopt(d, merge){
+  if(!Array.isArray(d.animations) || !d.animations.length) throw new Error("animasyon yok");
+  const dw = +d.w, dh = +d.h;
+  if(!dw || !dh) throw new Error("w/h eksik");
+  for(const a of d.animations){
+    if(!Array.isArray(a.frames) || !a.frames.length) throw new Error("kare yok");
+    for(const f of a.frames){
+      if(!Array.isArray(f) || f.length !== dh || String(f[0]).length !== dw)
+        throw new Error("kare boyutu w/h ile uyuşmuyor");
+    }
+  }
+  const incoming = d.animations.map(a => ({
+    name: String(a.name || "adsız"), fps: Math.min(24, Math.max(2, +a.fps || 8)), loop: !!a.loop,
+    frames: a.frames.map(f => f.slice()),
+    holds: Array.isArray(a.holds) && a.holds.length === a.frames.length
+      ? a.holds.map(n => Math.max(1, Math.min(99, +n || 1)))
+      : a.frames.map(() => 1)
+  }));
+  if(merge && dw === W && dh === H){
+    doc.anims.push(...incoming); ai = doc.anims.length - incoming.length;
+  } else {
+    doc = { w:dw, h:dh, palette:{ ...PAL_VARSAYILAN, ...(d.palette||{}) }, anims: incoming };
+    W = dw; H = dh; ai = 0;
+    PAL = { ...doc.palette };
+  }
+  fi = 0; undoStack.length = 0; redoStack.length = 0;
+  fillAnimSel();
+  $("animSel").value = ai;
+  $("fps").value = anim().fps; $("fpsVal").textContent = anim().fps;
+  $("loop").setAttribute("aria-pressed", String(!!anim().loop));
+  render();
+  return incoming.length;
+}
+$("import").onclick = () => {
+  const raw = $("out").value.trim();
+  if(!raw){ toast("Önce JSON'u kutuya yapıştır"); return; }
+  try{
+    const d = JSON.parse(raw);
+    const same = (+d.w === W && +d.h === H);
+    const n = adopt(d, same && confirm(
+      "Tuval boyutu aynı.\n\nTAMAM: mevcut animasyonların yanına ekle\nİPTAL: hepsinin yerine geçsin"));
+    toast(n + " animasyon içe alındı");
+  } catch(err){ toast("Okunamadı: " + err.message); }
+};
+$("reset").onclick = () => {
+  if(!confirm("Tüm çalışman silinip orijinal 9 kare geri yüklenecek. Emin misin?")) return;
+  doc = reference(); W = doc.w; H = doc.h; ai = 0; fi = 0;
+  PAL = { ...PAL_VARSAYILAN, ...(doc.palette||{}) }; sel = null; clip = null; railFrom = null;
+  undoStack.length = 0; redoStack.length = 0;
+  fillAnimSel(); render(); toast("Referans geri yüklendi");
+};
+
+// ---------- klavye ----------
+addEventListener("keydown", e => {
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z"){
+    e.preventDefault(); (e.shiftKey ? $("redo") : $("undo")).click(); return;
+  }
+  const map = { "1":"#", "2":"o", "3":"L", "4":"." };
+  if(map[e.key]){ setTool(map[e.key]); return; }
+  if(e.key === "5" || e.key.toLowerCase() === "s"){ setSelectMode(); return; }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase() === "a"){
+    e.preventDefault(); $("selAllBtn").click(); return;
+  }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase() === "c"){ copySel(false); return; }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase() === "x"){ copySel(true); return; }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase() === "v"){
+    e.preventDefault(); pasteSel(e.shiftKey); return;
+  }
+  if(e.key === "Escape"){ sel = null; render(); return; }
+  if(e.key === "Delete" || e.key === "Backspace"){ e.preventDefault(); clearSel(); return; }
+  if(e.key.startsWith("Arrow")){
+    e.preventDefault();
+    const d = { ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1] }[e.key];
+    if(sel){ moveSel(d[0],d[1]); } else { nudge(d[0],d[1]); }
+    return;
+  }
+  if(e.key === " "){ e.preventDefault(); $("play").click(); return; }
+  if(e.key === "[" || e.key === "]"){
+    if(playing) stop();
+    fi = e.key === "[" ? Math.max(0, fi-1)
+                       : Math.min(anim().frames.length-1, fi+1);
+    render(); return;
+  }
+});
+
+// ---------- başlat ----------
+fillAnimSel();
+syncPalette();
+$("fps").value = anim().fps; $("fpsVal").textContent = anim().fps;
+$("loop").setAttribute("aria-pressed", String(!!anim().loop));
+$("canvasWrap").style.background = "var(--canvas-dark)";
+render();
+})();
+</script>
+
+</body>
+</html>

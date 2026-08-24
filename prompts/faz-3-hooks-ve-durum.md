@@ -4,107 +4,123 @@
 
 ---
 
-`CLAUDE.md`'yi ve `docs/PLAN.md`'nin Faz 3 bölümünü oku. Faz 2 bitmiş olmalı.
+`CLAUDE.md`'yi oku. Faz 2 bitmiş olmalı.
 
-Bu fazda maskot Claude Code'un ne yaptığını öğreniyor. Henüz **tepki vermiyor**
-— eşleme Faz 4'ün işi. Bu fazın çıktısı: doğru çalışan bir durum makinesi ve
-onu doğrulayan bir test.
+Bu fazda pet Claude Code'un ne yaptığını öğreniyor. **Tepki vermiyor** — eşleme
+Faz 4'ün işi. Faz 3 bitince pet'te görünür bir değişiklik olmayacak; değişen
+tek şey `tracker.js`'in doğru durumu biliyor olması.
 
-## Yazılacak dosyalar
+## İstenen davranış (hedef)
 
-### `hooks/claude-pet-hook.py`
+Karmaşık bir durum makinesi istemiyoruz. Dört durum yeter:
+
+| Durum | Pet ne yapar |
+|---|---|
+| `IDLE` | Düz durur |
+| `WORKING` | Laptop çıkar, yazar |
+| `WAITING` | El sallar, yanında soru işareti |
+| (rate limit) | Laptop **aniden** kaybolur, `IDLE`'a döner |
+
+## `hooks/claude-pet-hook.py`
 
 Tek dosya, iki mod.
 
-**Yazıcı modu** (argümansız çalıştırıldığında): stdin'den hook JSON'ını okur,
-işe yarayan alanları alıp
-`~/.local/state/claude-pet/inbox/<nanosaniye>-<olay>.json` olarak yazar, biter.
+**Yazıcı modu** (argümansız): stdin'den hook JSON'ını okur,
+`~/.local/state/claude-pet/inbox/<nanosaniye>-<olay>.json` yazar, biter.
 
-- **Claude Code'u yavaşlatmamalı.** Ağır import yok, ağ yok, kilit yok.
-  Milisaniyeler içinde bitsin.
-- Sakladığın alanlar: `session_id`, `hook_event_name`, `tool_name`,
-  `notification_type`, `error_type`, `agent_type`. Gerisini at — bazı hook
-  yükleri megabaytlarca olabiliyor.
-- Her şey `try/except`. Hata olursa **sessizce çık (exit 0)**; hook'un
-  başarısızlığı Claude Code'un işini bozmamalı.
-- `$CLAUDE_PET_STATE_DIR` tanımlıysa onu kullan (test için gerekli).
+- Sakladığın alanlar sadece: `hook_event_name`, `notification_type`,
+  `error_type`. Başka bir şeye ihtiyaç yok, hook yükleri megabaytlarca
+  olabiliyor.
+- Her şey `try/except`, hata olursa **sessizce exit 0**. Hook'un başarısızlığı
+  Claude Code'un işini bozmamalı.
+- Milisaniyeler içinde bitsin. Ağır import yok.
+- `$CLAUDE_PET_STATE_DIR` tanımlıysa onu kullan (test için).
 
-**Kurulum modu**: `install`, `uninstall`, `status` alt komutları.
-`~/.claude/settings.json` içine hook girdileri ekler/çıkarır.
+**Kurulum modu**: `install` / `uninstall` / `status`.
 
-- Girdiler bir işaretle tanınsın (komut satırında sabit bir dize), ki
-  `uninstall` yalnızca kendi eklediklerini silsin.
-- **Elle yazılmış hook'lara asla dokunma.** Var olan `hooks` ağacını koru,
-  yalnızca kendi girdilerini ekle/çıkar. Sıfırdan yazma.
-- Dosyayı yazmadan önce yedekle, geçerli JSON ürettiğini doğrula, atomik
-  yaz (geçici dosya + `rename`).
-- `status`, hangi olayların kayıtlı olduğunu ve inbox'ın durumunu göstersin.
+Kaydolunacak olaylar — **yedi tane, hepsi matcher'sız** (`PreToolUse` hariç,
+o `*` alır):
 
-Kaydolunacak olaylar:
-
-| Olay | Matcher |
+| Olay | Ne için |
 |---|---|
-| `SessionStart` | — |
-| `UserPromptSubmit` | — |
-| `PreToolUse` | `*` |
-| `PostToolUse` | `*` |
-| `PostToolUseFailure` | `*` |
-| `PermissionRequest` | `*` |
-| `Notification` | — |
-| `Stop` | — |
-| `StopFailure` | — |
-| `SessionEnd` | — |
-| `SubagentStart` | — |
-| `SubagentStop` | — |
+| `UserPromptSubmit` | işe başladı |
+| `PreToolUse` (`*`) | çalışıyor |
+| `PermissionRequest` | sana soruyor |
+| `Notification` | sana soruyor / dikkat |
+| `Stop` | bitti |
+| `StopFailure` | rate limit ve diğer API hataları |
+| `SessionEnd` | kapandı |
 
-Kurmadan önce `claude --help` ya da dokümandan bu olay adlarının ve matcher
-desteğinin güncel olduğunu doğrula; biri kabul edilmezse onu atla ve
-kullanıcıya söyle, hepsini iptal etme.
+`PostToolUse`, `SubagentStart/Stop`, `PreCompact` gibi olaylara **gerek yok**,
+kaydetme.
+
+### settings.json'a dokunma kuralları — bunlar kırpılamaz
+
+`~/.claude/settings.json` kullanıcının gerçek yapılandırması; 13 anahtarı ve
+kendi statusline betiği var.
+
+- Yazmadan önce **yedekle**.
+- Var olan `hooks` ağacını koru; **elle yazılmış hook'lara asla dokunma**,
+  yalnızca kendi girdilerini ekle/çıkar. Girdileri sabit bir işaretle tanı ki
+  `uninstall` yalnızca kendininkileri silsin.
+- Geçerli JSON ürettiğini doğrula, **atomik yaz** (geçici dosya + `rename`).
 
 `Makefile`'a `hooks` ve `unhooks` hedefleri ekle.
 
-### `src/lib/tracker.js`
+## `src/lib/tracker.js`
 
 - `Gio.File.monitor_directory()` ile inbox'ı izler. **Yoklama yok.**
-- Yeni dosya gelince oku, `JSON.parse` et, uygula, **dosyayı sil**.
-- Her okuma `try/catch`. Bozuk dosyayı sil ve devam et; shell'i düşürme.
-- Oturum başına durum tut: `{state, tool, lastSeen}`. Durumlar:
-  `IDLE`, `THINKING`, `WORKING`, `WAITING_INPUT`.
-- Hepsini tek bir agregat duruma indirge. Kural: **en son güncellenen oturum
-  kazanır**, ama `WAITING_INPUT` her şeyi ezer — sen bloke ediyorsan pet onu
-  göstermeli.
-- Uzun süredir sesi çıkmayan oturumları düşür (10 dakika).
-- Inbox şişerse (uygulama kapalıyken hook'lar yazmaya devam etmiştir) açılışta
-  eski dosyaları temizle: belirli bir yaştan eski olanları sil.
-- Durum değişince bir sinyal yay (`changed`); Faz 4 buna bağlanacak.
+- Yeni dosya gelince oku, uygula, **sil**. Her okuma `try/catch`; bozuk dosyayı
+  sil ve devam et.
+- **Oturum başına durum tutma.** Tek bir genel durum yeter — son gelen olay
+  kazanır. Tek istisna: `WAITING` yapışkandır, aşağıdaki kurallar dışında
+  temizlenmez.
 
-### `tests/replay.js` (ya da `.py`)
+Geçiş tablosu:
 
-Kayıtlı hook olaylarını inbox'a zamanlamalı olarak döken bir test aracı.
-Claude Code çalıştırmadan bütün durum makinesini denemeyi sağlar.
+| Gelen | Yeni durum |
+|---|---|
+| `UserPromptSubmit`, `PreToolUse` | `WORKING` |
+| `PermissionRequest` | `WAITING` |
+| `Notification` (`permission_prompt`, `idle_prompt`, `agent_needs_input`) | `WAITING` |
+| `Notification` (diğer tipler) | değişmez |
+| `Stop`, `SessionEnd` | `IDLE` |
+| `StopFailure` | `IDLE` + `rateLimited` bayrağı (`error_type === 'rate_limit'`) |
+| `sleep-timeout` kadar hiç olay gelmemesi | `IDLE` |
 
-- Örnek bir olay dizisi yaz: oturum başlar → prompt → birkaç araç → izin
-  isteği → devam → biter.
-- İki oturumun aynı anda çalıştığı bir senaryo da olsun.
-- `Makefile`'a `replay` hedefi.
+- `WAITING`'den çıkış: yalnızca `UserPromptSubmit`, `PreToolUse`, `Stop` ya da
+  `SessionEnd`.
+- Durum değişince `changed` sinyali yay; Faz 4 buna bağlanacak.
+- Açılışta inbox'ta birikmiş eski dosyaları temizle (uygulama kapalıyken
+  hook'lar yazmaya devam etmiş olabilir).
+
+## `tests/replay.js`
+
+Kayıtlı olayları inbox'a döken küçük bir test aracı. `Makefile`'a `replay`.
+
+Tek senaryo yeter: prompt → birkaç araç → izin isteği → devam → bitiş.
+Ayrıca bir `StopFailure(rate_limit)` durumu.
+
+**Kanarya:** teste başlamadan önce bir `Gio.FileMonitor` kurup gerçekten olay
+aldığını doğrula. Alamıyorsa `inotify limiti dolmuş olabilir, make nested-kill
+çalıştır` diye açık bir hata ver ve dur. Bu limit dolduğunda FileMonitor
+**sessizce** çalışmaz oluyor ve mantık hatası gibi görünüyor.
 
 ## Kısıtlar
 
-- Animasyona, `states.js`'e, actor'lere bu fazda dokunma.
-- Pet'in görünüşü değişmeyecek. Değişen tek şey: `tracker.js` doğru durumu
-  biliyor olacak.
+- Animasyona, actor'lere, `states.js`'e dokunma. Pet'in görünüşü değişmeyecek.
+- Araç adı eşlemesi yapma (`Bash` şu, `Read` bu diye). Faz 4'te bile
+  gerekmiyor — herhangi bir araç çağrısı `WORKING` demek.
 
 ## Bitti sayılma koşulu
 
-- [ ] `make hooks` çalışıyor, `~/.claude/settings.json` geçerli JSON kalıyor
-- [ ] Kurulumdan önce elle bir hook ekle; `make hooks` sonrası **hâlâ orada**
+- [ ] `make hooks` çalışıyor, `settings.json` geçerli JSON kalıyor, yedek var
+- [ ] Kurulumdan **önce elle bir hook ekle**; `make hooks` sonrası hâlâ orada
 - [ ] `make unhooks` yalnızca kendi girdilerini siliyor, elle eklenen duruyor
-- [ ] Gerçek bir Claude Code oturumu açıp bir dosya okut: inbox'a dosya
-      düşüyor ve `tracker.js` durumu `WORKING` yapıyor
-- [ ] `make replay` senaryosu doğru durum geçişlerini üretiyor, çıktıyı yazdır
-- [ ] İki oturumlu senaryoda `WAITING_INPUT` diğerini eziyor
-- [ ] Inbox'a elle bozuk bir JSON dosyası koy: pet susuyor, shell ayakta,
-      dosya siliniyor
+- [ ] Gerçek bir Claude Code oturumunda bir dosya okut → durum `WORKING`
+- [ ] İzin isteyen bir komut → durum `WAITING`, sen cevap verene kadar öyle
+- [ ] `make replay` doğru geçişleri üretiyor, çıktıyı yazdır
+- [ ] Inbox'a elle bozuk bir JSON koy → pet susuyor, shell ayakta, dosya siliniyor
+- [ ] Kanarya çalışıyor: FileMonitor ölüyse açık hata veriyor
 - [ ] Devre dışı bırakınca dosya monitörü sökülüyor
-
-Hook betiğinin süresini ölç (`time`); 50 ms'nin altında olmalı.
+- [ ] Hook betiğinin süresi `time` ile 50 ms altında

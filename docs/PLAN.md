@@ -100,7 +100,7 @@ Kaydolunacak olaylar: `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
 
 En önemlisi **girdi bekleme durumu**: `PermissionRequest` ya da
 `Notification(permission_prompt | agent_needs_input)` geldiğinde pet sana
-döner, el sallar. Bu pet'in tek gerçek işlevi; diğer her şeyden görsel olarak
+döner, bekleme pozuna geçer. Bu pet'in tek gerçek işlevi; diğerlerinden görsel olarak
 açık ara ayrılsın.
 
 ### Faz 5 — Ayarlar ve kalıcılık
