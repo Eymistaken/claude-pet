@@ -29,6 +29,7 @@
 
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -105,6 +106,8 @@ export default class ClaudePetExtension extends Extension {
         this._laptopEnabled = true;
         this._paused = false;
         this._monitorIndex = -1;
+        this._chromeYolu = 'addChrome';
+        this._unredirectKapali = false;
         // Fazın merkezî iddiası ölçülebilir kalsın: kare sayısı yüzlerceyken
         // boyutlandırma sayısı animasyon değişimi kadar olmalı.
         this._frameCount = 0;
@@ -161,13 +164,15 @@ export default class ClaudePetExtension extends Extension {
             this._tracker.start();
 
             this._watchSettings();
+            this._holdUnredirect();
 
             // Monitör takılıp çıkarıldığında ya da çözünürlük değiştiğinde
             // pet ekran dışında kalmasın.
             this._connect(Main.layoutManager, 'monitors-changed',
                 () => this._onMonitorsChanged());
 
-            console.log(`${LOG} etkin · ızgara (${this._originX}, ${this._originY}) · ` +
+            console.log(`${LOG} etkin · ${this._chromeYolu} · ` +
+                `ızgara (${this._originX}, ${this._originY}) · ` +
                 `monitör ${this._monitorIndex} · hücre ${this._cell}px · ` +
                 `${Object.keys(this._sheet.animations).length} animasyon` +
                 `${this._paused ? ' · DURAKLATILMIŞ' : ''}`);
@@ -219,6 +224,8 @@ export default class ClaudePetExtension extends Extension {
             }
             this._actors = {};
 
+            this._releaseUnredirect();
+
             this._boxes = null;
             this._sheet = null;
             this._settings = null;
@@ -249,12 +256,37 @@ export default class ClaudePetExtension extends Extension {
 
             // affectsStruts: false -> pencere yerleşimini bozmaz, maksimize
             // pencereler küçülmez. trackFullscreen: false -> tam ekran
-            // pencerenin üstünde de görünür.
-            Main.layoutManager.addChrome(area, {
+            // olduğunda GİZLENMEZ.
+            //
+            // TAM EKRAN İÇİN `addChrome` DEĞİL `addTopChrome`. İkisi arasındaki
+            // tek fark bir satır (`ui/layout.js`):
+            //
+            //     addChrome(actor, params) {
+            //         this.uiGroup.add_child(actor);
+            //         if (this.uiGroup.contains(global.top_window_group))
+            //             this.uiGroup.set_child_below_sibling(
+            //                 actor, global.top_window_group);   // <-- burası
+            //         this._chrome.addActor(actor, params);
+            //     }
+            //
+            // Mutter tam ekran pencereleri `global.top_window_group`'a taşıyor
+            // (panelin tam ekranda kaybolmasının sebebi de bu). `addChrome`
+            // aktörü o grubun ALTINA koyduğu için pet tam ekran YouTube'un ya
+            // da oyunun arkasında kalıyordu — ölçüldü: pencere tam ekrana
+            // geçene kadar pet görünüyor, geçtiği anda kayboluyor.
+            // `addTopChrome` o restack'i yapmıyor; ekran klavyesi de tam ekran
+            // uygulamaların üstünde bu yüzden çıkabiliyor.
+            //
+            // `trackFullscreen: false` ayrı bir mesele ve hâlâ gerekli: o
+            // GÖRÜNÜRLÜĞÜ, bu YIĞIN SIRASINI belirliyor.
+            const ekle = Main.layoutManager.addTopChrome
+                ? 'addTopChrome' : 'addChrome';
+            Main.layoutManager[ekle](area, {
                 affectsStruts: false,
                 affectsInputRegion: ayar.affectsInputRegion,
                 trackFullscreen: false,
             });
+            this._chromeYolu = ekle;
 
             this._actors[ad] = area;
         }
@@ -355,6 +387,53 @@ export default class ClaudePetExtension extends Extension {
         this._director?.setSleepTimeout(ms);
         this._tracker?.setSleepTimeout(ms);
         console.log(`${LOG} boşta kalma süresi ${ms / 1000} sn`);
+    }
+
+    // ------------------------------------------------------------ tam ekran
+
+    /** Tam ekranda pet'in GERÇEKTEN görünmesini sağlayan şey.
+     *
+     * Mutter, ekranı tamamen kaplayan opak bir pencereyi bir süre sonra
+     * "unredirect" ediyor: bileşiklemeyi (compositing) atlayıp pencerenin
+     * tamponunu doğrudan ekrana basıyor. O anda kabuğun sahnesindeki hiçbir
+     * şey — panel, bildirim, bizim aktörlerimiz — çizilmiyor. Kullanıcının
+     * tarifi tam olarak buydu: "YouTube tam ekran açılınca önce bir görünüyor,
+     * sonra arkada kalıyor". Gecikme de bunun imzası; yığın sırası olsaydı
+     * anında kaybolurdu (ölçüldü: `addChrome` ile de `addTopChrome` ile de
+     * nested'de tam ekranın ÜSTÜNDE çiziliyor, çünkü nested'in dummy
+     * arka ucu doğrudan basmıyor).
+     *
+     * `disable_unredirect_for_display()` bir sayaç: kabuk da genel bakışı
+     * açarken aynısını yapıyor. Bedeli gerçek — tam ekran oyun ve video
+     * artık doğrudan basılmıyor, bileşikleme yolundan geçiyor. Bu eklentinin
+     * tek işi tam ekranda görünmek olduğu için kabul ediliyor.
+     *
+     * `enable_unredirect_for_display()` ile DENGELENMESİ şart: dengelenmezse
+     * eklenti kapatıldıktan sonra da bütün oturum boyunca unredirect kapalı
+     * kalır.
+     */
+    _holdUnredirect() {
+        if (this._unredirectKapali)
+            return;
+        try {
+            Meta.disable_unredirect_for_display(global.display);
+            this._unredirectKapali = true;
+            console.log(`${LOG} tam ekran: unredirect kapatıldı ` +
+                '(pet tam ekran pencerelerin üstünde kalsın diye)');
+        } catch (error) {
+            console.warn(`${LOG} unredirect kapatılamadı: ${error}`);
+        }
+    }
+
+    _releaseUnredirect() {
+        if (!this._unredirectKapali)
+            return;
+        this._unredirectKapali = false;
+        try {
+            Meta.enable_unredirect_for_display(global.display);
+        } catch (error) {
+            console.warn(`${LOG} unredirect geri verilemedi: ${error}`);
+        }
     }
 
     /** Claude Code girdi bekliyor: pet görünmüyor olabilir, bildirim gönder. */

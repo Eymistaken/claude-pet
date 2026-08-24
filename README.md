@@ -107,6 +107,24 @@ Sonuç: karakterin dikdörtgeni dışındaki her piksel tıklamayı altına geç
 eklenti odak almıyor, panelin ve tam ekran pencerelerin üstünde duruyor.
 XWayland yok, kompozitör hilesi yok, kesirli ölçeklemede bulanıklık yok.
 
+### Tam ekranda görünmek
+
+Tam ekran bir pencerenin üstünde durmak yalnızca yığın sırası meselesi değil.
+Mutter, ekranı tamamen kaplayan opak bir pencereyi bir süre sonra
+**unredirect** ediyor: bileşiklemeyi (compositing) tamamen atlayıp pencerenin
+tamponunu doğrudan ekrana basıyor. O andan sonra kabuğun sahnesindeki hiçbir
+şey çizilmiyor — panel de, bildirimler de, maskot da. Belirtisi kendine has:
+pencere tam ekrana geçince pet **önce görünüyor, bir an sonra kayboluyor.**
+
+Eklenti bu yüzden `Meta.disable_unredirect_for_display()` ile unredirect'i
+kapalı tutuyor (kabuk da genel bakışı açarken aynısını yapıyor) ve aktörleri
+`addChrome` yerine `addTopChrome` ile ekliyor.
+
+**Bedeli var:** tam ekran video ve oyunlar artık doğrudan ekrana basılmıyor,
+bileşikleme yolundan geçiyor. Bu, oyunlarda birkaç kare/saniye demek olabilir.
+Pet'i tam ekranda görmek istemiyorsan `make disable` (ya da sağ tık →
+Duraklat değil, tamamen kapatmak gerekiyor) unredirect'i de geri veriyor.
+
 ## Durum nereden geliyor
 
 Claude Code'un hook'ları. Her olayda küçük bir Python betiği
@@ -167,6 +185,21 @@ journalctl -o cat /usr/bin/gnome-shell | grep claude-pet
 - Log'da `animasyonlar yüklenemedi` varsa varlık dosyası bozuk; o durumda pet
   **hiç görünmüyor** (aşağıdaki bilinen eksiklere bak).
 
+**"Uzantının tercihleri yok" diyor, ayarlar penceresi açılmıyor.**
+
+Kabuk `hasPrefs` bilgisini eklentiyi **ilk taradığı anda** (oturum açılışında)
+hesaplıyor ve bir daha güncellemiyor. `prefs.js` sonradan geldiyse — ya da
+kurulum sırasında kabuk yarım bir dizin gördüyse — bu bayrak `false` takılı
+kalıyor. `disable`/`enable` düzeltmiyor.
+
+```sh
+gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
+  --method org.gnome.Shell.Extensions.GetExtensionInfo claude-pet@eymistaken.local
+```
+
+Çıktıda `'hasPrefs': <false>` ama diskte `prefs.js` varsa: **oturumu kapatıp
+aç.** Wayland'de kabuğu yeniden başlatmanın başka yolu yok.
+
 **Pet var ama tepki vermiyor.**
 
 ```sh
@@ -183,8 +216,11 @@ ls ~/.local/state/claude-pet/inbox/
 - Pet duraklatılmış olabilir: sağ tık → Devam et.
 
 **Kod değiştirdim, yansımıyor.** GNOME 45+ ESM modüllerini önbelleğe alıyor;
-`disable`/`enable` JS'i yeniden okumuyor. Wayland'de kabuk yeniden
-başlatılamadığı için geliştirme iç içe oturumda yapılıyor: `make nested`.
+`disable`/`enable` JS'i yeniden okumuyor (ölçüldü: `make install` sonrası
+kapat/aç, logda hâlâ eski sürümün satırlarını basıyor). Kabuk modülü
+eklentiyi **ilk etkinleştirdiğinde** okuyor; o andan sonra değişen dosya
+ancak oturum yeniden açılınca geçerli oluyor. Geliştirme bu yüzden iç içe
+oturumda yapılıyor: `make nested`.
 
 ## Bilinen eksikler
 
@@ -193,9 +229,8 @@ başlatılamadığı için geliştirme iç içe oturumda yapılıyor: `make nest
 - **Uyku pozu yok.** `sleep-timeout` ayarı pet'in "çalışıyor" saymayı
   bırakmasını sağlıyor, ama varlıkta `sleep` klibi olmadığı için pet uyumuyor,
   düz duruşta kalıyor. Klip eklenirse kod tarafında değişiklik gerekmiyor.
-- **Ayarlar penceresi pet'in üstünde çiziliyor.** Normal pencereler pet'in
-  altında kalıyor, ama prefs penceresi `top_window_group`'a düştüğü için üstte;
-  ayar değiştirirken pet'i görmek istiyorsan pencereyi kenara çek.
+- **Tam ekranda unredirect kapalı tutuluyor**, yani tam ekran oyun/video
+  doğrudan ekrana basılamıyor. Görünürlüğün bedeli bu.
 - **Ekran ölçeği (`scale_factor`) canlı izlenmiyor.** Ekran ölçeğini
   %100 → %200 yaparsan pet, bir sonraki ayar değişikliğine kadar eski hücre
   boyutunda kalıyor.

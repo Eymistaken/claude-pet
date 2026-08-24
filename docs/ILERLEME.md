@@ -760,4 +760,66 @@ Notlar
   tuzağı) zaten ilgili dosyaların başlığında yazıyor. PLAN.md tarihsel
   kayıt olarak olduğu gibi duruyor.
 
+## Faz sonrası — tam ekran ve ayarlar penceresi            2026-08-24
+
+Kullanıcı iki şey bildirdi: ayarlar penceresi açılmıyor, ve tam ekran YouTube
+açılınca pet "önce bir görünüp sonra arkada kalıyor".
+
+### Tam ekran: sebep yığın sırası DEĞİL
+
+İlk hipotez `addChrome`'un aktörü `global.top_window_group`'un altına
+koymasıydı. **Kontrol turu bunu çürüttü:** nested'de tam ekran bir GTK
+penceresi açıldı, `addTopChrome` ile de `addChrome` ile de pet pencerenin
+ÜSTÜNDE çizildi. Yani nested bu hatayı hiç üretmiyor — çünkü sebep başka.
+
+Asıl sebep **unredirect**: Mutter ekranı tamamen kaplayan opak bir pencereyi
+bir süre sonra doğrudan ekrana basıyor, bileşiklemeyi atlıyor. O anda kabuğun
+sahnesindeki hiçbir şey çizilmiyor. Kullanıcının tarifindeki **gecikme** bunun
+imzası; yığın sırası olsaydı pencere tam ekrana geçtiği anda kaybolurdu.
+Nested'in dummy arka ucu doğrudan basma yapmadığı için orada hiç görünmüyor.
+
+Çözüm `enable()`'da `Meta.disable_unredirect_for_display(global.display)`,
+`disable()`'da dengeleyen `enable_unredirect_for_display()`. Dengelenmezse
+eklenti kapandıktan sonra da bütün oturum boyunca unredirect kapalı kalır.
+`addTopChrome` de korundu (kabuğun ekran klavyesi için kullandığı yol).
+
+Bedeli açık: tam ekran oyun/video artık doğrudan basılmıyor. README'ye yazıldı.
+
+### Ayarlar penceresi: kabuğun kaydı bayat
+
+`gnome-extensions prefs` "uzantının tercihleri yok" diyordu, oysa `prefs.js`
+diskte duruyordu. Kabuğa soruldu:
+
+```
+GetExtensionInfo → 'hasPrefs': <false>
+```
+
+`hasPrefs` eklenti NESNESİ yaratılırken hesaplanıyor — yani oturum açılışında,
+dizin ilk tarandığında — ve bir daha güncellenmiyor. Bu oturumun kabuğu
+11:25'te başlamış; o saatte kurulu ağaç Faz 4'tü ve `prefs.js` yoktu.
+`disable`/`enable` bunu düzeltmiyor (denendi).
+
+Aynı ölçüm ikinci bir şeyi de gösterdi: kabuk eklenti modülünü **ilk
+etkinleştirmede** okuyor. `make install` sonrası kapat/aç yeni JS'i
+YÜKLEMİYOR — logda hâlâ eski sürümün satırları çıkıyor. Yani kod değişikliği
+gerçek oturumda ancak oturum yeniden açılınca geçerli oluyor.
+
+Yan düzeltme: `make install` artık `metadata.json`'ı EN SON kopyalıyor. Kabuk
+bir dizini ancak içinde `metadata.json` varsa eklenti sayıyor; önce o
+giderse kabuk yarım bir ağaç görüp `hasPrefs`i yanlış hesaplayabiliyor.
+Zip'in içinde de `metadata.json` `prefs.js`'ten önce geliyor — muhtemelen
+`hasPrefs: false` ilk oraya böyle takıldı.
+
+Doğrulama
+- [x] `addTopChrome` GNOME 46'da var → nested logu `etkin · addTopChrome`
+- [x] `Meta.disable/enable_unredirect_for_display` GNOME 46 typelib'inde
+      modül düzeyinde fonksiyon (MetaCompositor'da değil)
+- [x] Nested'de kapat/aç turu: `unredirect kapatıldı` satırı iki kez, hata yok
+- [x] `make check` geçiyor
+- [ ] **Tam ekranda gerçek doğrulama yapılamadı**: unredirect nested'de hiç
+      devreye girmiyor, gerçek oturum ise yeni JS'i ancak oturum yeniden
+      açılınca okuyor. Kullanıcının çıkış-giriş sonrası tam ekran YouTube ile
+      bakması gerekiyor. Logda `tam ekran: unredirect kapatıldı` satırı
+      görünüyorsa yol devrede demektir.
+
 <!-- Proje fazları bitti. Yayın: metadata.json'daki version 1'de bırakıldı. -->

@@ -50,14 +50,22 @@ schemas:
 # assets/ bilerek src/ disinda duruyor: o bir VARLIK, kod degil (poz
 # atolyesinden dogrudan uzerine yaziliyor). Eklenti onu kendi dizininden
 # okudugu icin kurulumda iceri kopyalaniyor.
+# metadata.json EN SON kopyalaniyor, bilerek. Kabuk bir dizini ancak icinde
+# metadata.json varsa eklenti sayiyor ve o ani "yakalayip" dosyalari o anda
+# tarayabiliyor. Once metadata gitseydi, kabuk yarim bir agac gorup
+# `hasPrefs`i yanlis hesaplayabilirdi -- OLCULDU: gercek oturumda
+# `hasPrefs: false` takildi kaldi ve "uzantinin tercihleri yok" hatasi
+# verdi, oysa prefs.js diskteydi.
 install: schemas
 	rm -rf $(EXT_DIR)
 	mkdir -p $(EXT_DIR)
-	cp -r $(SRC)/. $(EXT_DIR)/
 	cp -r $(ASSETS) $(EXT_DIR)/
 # Poz atolyesinden kalan elle alinmis yedekler kuruluma girmesin (~300 KB,
 # eklenti yalnizca animations.json okuyor).
 	rm -f $(EXT_DIR)/assets/animations.yedek*.json
+	cp -r $(SRC)/lib $(SRC)/schemas $(EXT_DIR)/
+	cp $(SRC)/extension.js $(SRC)/prefs.js $(EXT_DIR)/
+	cp $(SRC)/metadata.json $(EXT_DIR)/
 	@echo "kuruldu: $(EXT_DIR)"
 	@echo "NOT: kurmak etkinlestirmek DEGIL. Test icin 'make nested'."
 
