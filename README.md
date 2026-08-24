@@ -1,327 +1,359 @@
 # claude-pet
 
-Claude Code'un ne yaptığını masaüstünde bir maskotla gösteren GNOME Shell
-eklentisi. Kod yazarken cebinden bir laptop çıkarıp yazmaya başlar, senin
-cevabını beklerken durup bekler, iş bitince laptobu kaldırır.
+A desktop mascot that shows what Claude Code is doing. It pulls a laptop out
+of its pocket and starts typing when Claude works, stands still and waits when
+Claude asks you something, and puts the laptop away when the job is done.
 
 ![claude-pet](docs/pet.gif)
 
-> **English:** A GNOME Shell extension that shows what Claude Code is doing
-> through a desktop mascot. Wayland-native — it draws into the shell instead of
-> opening a window, so it stays on top, passes clicks through, and never steals
-> focus.
+This branch is the **GNOME Shell 46 extension**.
 
-**Hedef ortam:** GNOME Shell 46 · Wayland · Zorin OS 18 / Ubuntu 24.04
+> ### On KDE, Sway, Hyprland or COSMIC?
+>
+> There is a second build of the same mascot — same animation file, same state
+> machine, same eight modules under `src/lib/` — packaged as a single
+> AppImage that uses the `wlr-layer-shell` protocol instead of drawing into
+> GNOME Shell. Grab it from the
+> **[releases page](https://github.com/Eymistaken/claude-pet/releases)**, or read about it on the
+> [`appimage` branch](https://github.com/Eymistaken/claude-pet/tree/appimage).
+>
+> The split comes down to that one protocol: `wlr-layer-shell` lets a client
+> pin a surface above everything else, pass clicks through, and never take
+> focus. KWin and wlroots speak it; GNOME's compositor Mutter does not — which
+> is exactly why GNOME needs an extension.
+
+**Target environment:** GNOME Shell 46 · Wayland · Zorin OS 18 / Ubuntu 24.04
 
 ---
 
-## Gereksinimler
+## Requirements
 
 | | |
 |---|---|
-| GNOME Shell | **46** (`gnome-shell --version`). `metadata.json` yalnızca 46 diyor. |
-| Oturum | Wayland'de geliştirildi ve ölçüldü. X11'de denenmedi. |
-| Python | 3.8+ — hook betiği yalnızca standart kütüphane kullanıyor. |
-| Claude Code | Hook'ları destekleyen bir sürüm (`~/.claude/settings.json`). |
-| Araçlar | `make`, `zip`, `glib-compile-schemas`, `gjs` (GNOME ile birlikte gelir) |
+| GNOME Shell | **46** (`gnome-shell --version`). `metadata.json` claims 46 only. |
+| Session | Developed and measured on Wayland. Untested on X11. |
+| Python | 3.8+ — the hook script uses the standard library only. |
+| Claude Code | A version that supports hooks (`~/.claude/settings.json`). |
+| Tools | `make`, `zip`, `glib-compile-schemas`, `gjs` (ship with GNOME) |
 
-Sudo gerekmiyor: her şey `~/.local` altına kuruluyor.
+No sudo required: everything installs under `~/.local`.
 
-`make gif` ayrıca Python `Pillow` istiyor — yalnızca yukarıdaki GIF'i yeniden
-üretmek için, kurulumun parçası değil.
+`make gif` additionally wants Python `Pillow` — only to regenerate the GIF
+above, it is not part of installing.
 
-## Kurulum
-
-```sh
-make check       # paket kontrolu: metadata, varlık, şema, sözdizimi
-make install     # ~/.local/share/gnome-shell/extensions altına kurar
-make enable      # gerçek oturumda etkinleştirir
-make hooks       # Claude Code hook'larını ~/.claude/settings.json'a yazar
-```
-
-`make hooks` senin elle yazdığın hook'lara dokunmuyor: yalnızca kendi
-girdilerini (komut satırında `claude-pet-hook.py` geçenler) ekliyor, önce
-zaman damgalı bir yedek alıyor ve dosyayı atomik yazıyor. Ne kurulduğunu
-görmek için `make hooks-status`.
-
-Açık bir Claude Code oturumu yeni hook'ları hemen görmeyebilir; kesin yol
-yeni bir oturum açmak.
-
-Kaldırmak:
+## Install
 
 ```sh
-make uninstall   # eklenti + hook girdileri + olay kutusu
+make check       # package check: metadata, assets, schema, syntax
+make install     # installs under ~/.local/share/gnome-shell/extensions
+make enable      # enables it in the real session
+make hooks       # writes Claude Code hooks into ~/.claude/settings.json
 ```
 
-Ayarlar (konum, boyut) bilerek kalıyor; onları da silmek için:
+`make hooks` leaves hooks you wrote by hand alone: it only adds its own
+entries (the ones with `claude-pet-hook.py` on the command line), takes a
+timestamped backup first, and writes the file atomically. Run
+`make hooks-status` to see what got installed.
+
+A Claude Code session that is already open may not pick up the new hooks
+immediately; the reliable path is to start a new session.
+
+To remove:
+
+```sh
+make uninstall   # extension + hook entries + event inbox
+```
+
+Settings (position, size) are deliberately left behind. To drop those too:
 
 ```sh
 dconf reset -f /org/gnome/shell/extensions/claude-pet/
 ```
 
-## Ayarlar
+## Settings
 
-Pet'e **sağ tıkla**: Duraklat · Ayarlar · Konumu sıfırla.
+**Right-click** the pet: Pause · Settings · Reset position.
 
-| Ayar | Ne yapar |
+| Setting | What it does |
 |---|---|
-| **Pet** | Genel anahtar. Kapatılınca maskot hiç görünmez — Claude çalışıyor olsa bile. Süreç yoklaması da durur. |
-| Boyut | Bir sprite hücresinin piksel kenarı (1–8). Tam sayı, yani büyütmek bulanıklaştırmıyor. |
-| Laptop | Laptop katmanı çizilsin mi. |
-| Boşta kalma süresi | Bu kadar saniye hiç olay gelmezse pet çalışmayı bırakmış sayar. 0: kapalı. |
-| Girdi beklerken bildirim | Claude Code soru sorduğunda masaüstü bildirimi gönder. |
-| Monitör | Pet hangi monitörde dursun. Monitör çıkarılırsa birincile düşer, geri takılınca döner. |
+| **Pet** | Master switch. Turned off, the mascot never appears — even while Claude is running. Process polling stops too. |
+| Size | Pixel edge of one sprite cell (1–8). An integer, so scaling up does not blur. |
+| Laptop | Whether the laptop layer is drawn. |
+| Idle timeout | If no event arrives for this many seconds, the pet stops counting as working. 0: off. |
+| Notify while waiting for input | Send a desktop notification when Claude Code asks a question. |
+| Monitor | Which monitor the pet sits on. Falls back to the primary if that monitor is unplugged, and returns when it comes back. |
 
-Pet **sürüklenerek** taşınıyor; bıraktığın yer monitöre göreli olarak
-kaydediliyor, yani çözünürlük değişse de ekran dışında kalmıyor.
+The pet is moved by **dragging**; where you drop it is saved relative to the
+monitor, so it stays on screen even if the resolution changes.
 
-## Neden eklenti, neden pencere değil
+## Why an extension and not a window
 
-Wayland bir istemciye kendi penceresini konumlandırma imkânı vermiyor,
-"her zaman üstte" diye bir kavram yok, ve tıklama geçirgenliği pencerenin
-sınırlarının dışına taşınamıyor. GNOME'un kompozitörü Mutter `wlr-layer-shell`
-protokolünü de desteklemiyor — yani Sway ve Hyprland'de işe yarayan çözüm
-burada yok.
+Wayland gives a client no way to position its own window, has no concept of
+"always on top", and click-through cannot extend past a window's bounds.
+GNOME's compositor Mutter does not support the `wlr-layer-shell` protocol
+either — so the solution that works on Sway and Hyprland is unavailable here.
+(That solution is exactly what the [AppImage build](https://github.com/Eymistaken/claude-pet/releases) uses.)
 
-Geriye tek temiz yol kalıyor: pencere açmamak. Maskot doğrudan GNOME Shell'in
-sahnesine iki Clutter actor olarak ekleniyor — biri karakter, biri laptop:
+That leaves one clean option: do not open a window. The mascot is added
+directly to GNOME Shell's scene graph as two Clutter actors — one for the
+character, one for the laptop:
 
 ```js
 Main.layoutManager.addChrome(area, {
-    affectsStruts: false,       // pencere yerleşimini bozmaz
-    affectsInputRegion: …,      // aşağıdaki nota bak
-    trackFullscreen: false,     // tam ekranda da görünür
+    affectsStruts: false,       // does not disturb window layout
+    affectsInputRegion: …,      // see the note below
+    trackFullscreen: false,     // visible in fullscreen too
 });
 ```
 
-Laptop ayrı bir actor, çünkü karakterin epey solunda duruyor: tek actor olsaydı
-aradaki şeffaf boşluk da tıklama yutardı. Laptop actor'ü hiçbir olay almıyor.
+The laptop is a separate actor because it sits well to the left of the
+character: as a single actor, the transparent gap between them would swallow
+clicks too. The laptop actor receives no events at all.
 
-> **Ölçülmüş not:** `affectsInputRegion` Wayland'de bir şey **yapmıyor**.
-> `ui/layout.js::_updateRegions()` içinde
-> `wantsInputRegion = … && !Meta.is_wayland_compositor()`, yani izlenen
-> actor'ler atlanıyor. Bir parçayı tıklama yutmaz yapan şey `reactive: false`.
-> Bayrak niyet belgesi olarak duruyor (X11'de gerçekten input bölgesini
-> belirliyor).
+> **Measured note:** `affectsInputRegion` does **nothing** on Wayland. In
+> `ui/layout.js::_updateRegions()`,
+> `wantsInputRegion = … && !Meta.is_wayland_compositor()`, so tracked actors
+> are skipped entirely. What actually makes a piece click-through is
+> `reactive: false`. The flag stays as a statement of intent (on X11 it really
+> does define the input region).
 
-Sonuç: karakterin dikdörtgeni dışındaki her piksel tıklamayı altına geçiriyor,
-eklenti odak almıyor, panelin ve tam ekran pencerelerin üstünde duruyor.
-XWayland yok, kompozitör hilesi yok, kesirli ölçeklemede bulanıklık yok.
+The result: every pixel outside the character's rectangle passes clicks
+through, the extension never takes focus, and it sits above the panel and
+above fullscreen windows. No XWayland, no compositor tricks, no blurring at
+fractional scaling.
 
-### Tam ekranda görünmek
+### Being visible in fullscreen
 
-Tam ekran bir pencerenin üstünde durmak yalnızca yığın sırası meselesi değil.
-Mutter, ekranı tamamen kaplayan opak bir pencereyi bir süre sonra
-**unredirect** ediyor: bileşiklemeyi (compositing) tamamen atlayıp pencerenin
-tamponunu doğrudan ekrana basıyor. O andan sonra kabuğun sahnesindeki hiçbir
-şey çizilmiyor — panel de, bildirimler de, maskot da. Belirtisi kendine has:
-pencere tam ekrana geçince pet **önce görünüyor, bir an sonra kayboluyor.**
+Sitting on top of a fullscreen window is not just a stacking-order question.
+After a while Mutter **unredirects** an opaque window that covers the whole
+screen: it skips compositing entirely and scans the window's buffer straight
+out. From that moment nothing in the shell's scene graph is drawn — not the
+panel, not notifications, not the mascot. The symptom is distinctive: when a
+window goes fullscreen the pet **appears first and vanishes a moment later.**
 
-Eklenti bu yüzden `Meta.disable_unredirect_for_display()` ile unredirect'i
-kapalı tutuyor (kabuk da genel bakışı açarken aynısını yapıyor) ve aktörleri
-`addChrome` yerine `addTopChrome` ile ekliyor.
+So the extension holds unredirect off with
+`Meta.disable_unredirect_for_display()` (the shell does the same thing while
+the overview is open) and adds its actors with `addTopChrome` rather than
+`addChrome`.
 
-**Bedeli var:** tam ekran video ve oyunlar artık doğrudan ekrana basılmıyor,
-bileşikleme yolundan geçiyor. Bu, oyunlarda birkaç kare/saniye demek olabilir.
-Pet'i tam ekranda görmek istemiyorsan `make disable` (ya da sağ tık →
-Duraklat değil, tamamen kapatmak gerekiyor) unredirect'i de geri veriyor.
+**There is a cost:** fullscreen video and games no longer go straight to the
+screen, they go through the compositing path. In games that can mean a few
+frames per second. If you would rather not see the pet in fullscreen,
+`make disable` (turning it off entirely — right-click → Pause is not enough)
+gives unredirect back.
 
-## Pet ne zaman var
+> The [AppImage build](https://github.com/Eymistaken/claude-pet/releases) does not pay this cost: on the `overlay` layer,
+> being above fullscreen windows is what the protocol guarantees.
 
-Pet, Claude çalışırken var; çalışmıyorken hiç yok. "Çalışmak" ekranda görünmek
-değil: masaüstü uygulaması arka planda, küçültülmüş, başka pencerenin altında
-olabilir — süreç ayaktaysa pet de ayakta. Terminalde açılan Claude Code de
-aynı şekilde sayılıyor.
+## When the pet exists
 
-| Ayardaki anahtar | Claude | Pet |
+The pet exists while Claude is running, and does not exist otherwise.
+"Running" is not "visible on screen": the desktop app may be in the
+background, minimized, or behind another window — if the process is alive, so
+is the pet. Claude Code opened in a terminal counts the same way.
+
+| Master switch | Claude | Pet |
 |---|---|---|
-| açık | masaüstü uygulaması (arka planda bile) | var |
-| açık | terminalde `claude` | var |
-| açık | ikisi birden | var |
-| açık | hiçbiri | **yok** |
-| **kapalı** | (fark etmez) | **yok** |
+| on | desktop app (even in the background) | yes |
+| on | `claude` in a terminal | yes |
+| on | both | yes |
+| on | neither | **no** |
+| **off** | (doesn't matter) | **no** |
 
-Pet yokken aktörler gizli, hiçbir zamanlayıcı kurulu değil ve unredirect geri
-verilmiş. Ayardaki anahtar kapalıyken süreç yoklaması da durur — kapalı bir
-pet hiçbir şey tüketmez.
+While the pet does not exist, the actors are hidden, no timer is armed, and
+unredirect has been given back. With the master switch off, process polling
+stops too — a disabled pet costs nothing.
 
-Anahtar kapalıyken ekranda tıklanacak bir pet olmadığı için geri açmak da
-ayarlar penceresinden: `gnome-extensions prefs claude-pet@eymistaken.local`
-ya da Uzantılar uygulaması.
+With the switch off there is no pet on screen to click, so turning it back on
+happens in the settings window:
+`gnome-extensions prefs claude-pet@eymistaken.local`, or the Extensions app.
 
-Ölçüt **pencere değil süreç**: `/proc` içinde `claude-desktop` ya da `claude`
-adında bir süreç var mı. Pencereye bakan bir yöntem (`Shell.AppSystem`)
-penceresi olmayan uygulamayı ve terminalde açılan Claude Code'u kaçırırdı.
+The test is **the process, not the window**: is there a process named
+`claude-desktop` or `claude` in `/proc`. A window-based method
+(`Shell.AppSystem`) would miss an app with no window, and would miss Claude
+Code running in a terminal.
 
-Süreç doğumu/ölümü için ayrıcalık istemeyen bir olay kaynağı olmadığından
-burada yoklama kaçınılmaz. Maliyet iki kademeli: Claude **açıkken** yalnızca
-bulunan sürecin hâlâ yaşadığına bakılıyor (tek dosya, ~0.05 ms, 2 saniyede
-bir); **kapalıyken** tam tarama gerekiyor (365 süreç, ~5.7 ms) ve o yüzden 8
-saniyede bir soruluyor. Claude Code tarafında gecikmenin telafisi de var: ilk
-hook olayı geldiği anda yoklama beklenmeden bakılıyor.
+Since there is no unprivileged event source for process birth and death,
+polling is unavoidable here. The cost has two tiers: while Claude is **open**
+only the found process is checked for still being alive (one file, ~0.05 ms,
+every 2 seconds); while it is **closed** a full scan is needed (365 processes,
+~5.7 ms) and so it is asked every 8 seconds. The latency has a compensator on
+the Claude Code side: the moment the first hook event arrives, the check runs
+without waiting for the poll.
 
-Pet kapalıyken **unredirect de geri veriliyor**, yani Claude açık değilken tam
-ekran oyunun bileşikleme bedeli de yok.
+While the pet is off **unredirect is given back too**, so a fullscreen game
+pays no compositing cost when Claude is not running.
 
-## Durum nereden geliyor
+## Where the state comes from
 
-Claude Code'un hook'ları. Her olayda küçük bir Python betiği
-`~/.local/state/claude-pet/inbox/` içine bir JSON dosyası bırakıyor; eklenti
-`Gio.FileMonitor` ile bu dizini izliyor — yoklama yok, olay tabanlı.
+Claude Code's hooks. On every event a small Python script drops a JSON file
+into `~/.local/state/claude-pet/inbox/`; the extension watches that directory
+with `Gio.FileMonitor` — event-driven, no polling.
 
-Yedi olay, üç durum. Araç adına bakılmıyor: **herhangi bir araç çağrısı
-"çalışıyor" demek.**
+Seven events, three states. The tool name is not inspected: **any tool call
+means "working".**
 
-| Hook olayı | Durum |
+| Hook event | State |
 |---|---|
-| `UserPromptSubmit`, `PreToolUse` | **WORKING** — laptop çıkar, yazar |
-| `PermissionRequest`, `Notification`¹ | **WAITING** — laptobu kaldırır, bekler |
-| `Stop`, `SessionEnd` | **IDLE** — laptobu kaldırır, düz durur |
-| `StopFailure` (rate limit) | **IDLE** — laptop *animasyonsuz*, aniden kaybolur |
+| `UserPromptSubmit`, `PreToolUse` | **WORKING** — laptop comes out, types |
+| `PermissionRequest`, `Notification`¹ | **WAITING** — puts the laptop away, waits |
+| `Stop`, `SessionEnd` | **IDLE** — puts the laptop away, stands still |
+| `StopFailure` (rate limit) | **IDLE** — laptop vanishes *without animation* |
 
-¹ yalnızca `permission_prompt`, `idle_prompt`, `agent_needs_input` tipleri.
+¹ only the `permission_prompt`, `idle_prompt` and `agent_needs_input` types.
 
-Durum → klip eşlemesi bir tablo (`src/lib/states.js`), `if` zinciri değil:
+The state → clip mapping is a table (`src/lib/states.js`), not a chain of
+`if`s:
 
 ```
-dizi(A → B) = ÇIKIŞ[A] + GİRİŞ[B] + DÖNGÜ[B]
+sequence(A → B) = EXIT[A] + ENTER[B] + LOOP[B]
 ```
 
-İki davranış kuralı: kod yazma modu **yapışkan** (araya giren Read/Bash
-laptobu kaldırmıyor) ve animasyon **ortasından kesilmiyor** (bulunduğu turu
-bitiriyor; tek istisna rate limit).
+Two behavioural rules: typing mode is **sticky** (an intervening Read/Bash
+does not put the laptop away), and an animation is **never cut mid-clip** (it
+finishes the cycle it is in; the one exception is a rate limit).
 
-Aynı anda birden fazla Claude Code oturumu varsa tek bir genel durum tutuluyor:
-**son gelen olay kazanır.** Ekranda tek maskot var.
+If several Claude Code sessions run at once, a single aggregate state is kept:
+**the most recent event wins.** There is one mascot on screen.
 
-## Animasyonlar
+## Animations
 
-Kareler kod içinde değil, `assets/animations.json` içinde: her kare bir hücre
-ızgarası, her hücre gövde / göz / laptop / boş. Cairo bunları yatay şeritler
-hâlinde çiziyor (53×37'lik bir karede 1961 hücre yerine ~50 dikdörtgen), yani
-her ölçekte net ve HiDPI sorunu yok.
+Frames do not live in code, they live in `assets/animations.json`: each frame
+is a grid of cells, each cell is body / eye / laptop / empty. Cairo draws them
+as horizontal strips (~50 rectangles instead of 1961 cells in a 53×37 frame),
+so it stays crisp at any scale and has no HiDPI problem.
 
-Yeni poz eklemek kod yazmak değil, çizmek: `tools/extract_frames.py` bir ekran
-kaydından kareleri çıkarıyor, poz atölyesinde düzeltiyorsun, JSON'u geri
-koyuyorsun. Ayrıntılar `docs/KAYIT.md` ve `docs/ANIMASYON.md`'de.
+Adding a new pose is drawing, not coding: `tools/extract_frames.py` pulls
+frames out of a screen recording, you clean them up in the pose workshop, and
+you put the JSON back. Details in `docs/KAYIT.md` and `docs/ANIMASYON.md`
+(Turkish).
 
-## Sorun giderme
+## Troubleshooting
 
-**Pet ekranda yok.**
+**The pet is not on screen.**
 
 ```sh
-gnome-extensions info claude-pet@eymistaken.local   # Durum: ACTIVE olmalı
+gnome-extensions info claude-pet@eymistaken.local   # State should be ACTIVE
 journalctl -o cat /usr/bin/gnome-shell | grep claude-pet
 ```
 
-- `Durum: INITIALIZED` → kurulu ama etkin değil: `make enable`.
-- `gnome-extensions enable` "yok" diyorsa kabuk yeni kurulumu henüz
-  taramamıştır; birkaç saniye bekleyip tekrar dene.
-- Log'da `etkin · ızgara (x, y)` satırı varsa pet çiziliyor ama ekran dışında
-  kalmış olabilir: sağ tık menüsünden **Konumu sıfırla**, ya da
+- `State: INITIALIZED` → installed but not enabled: `make enable`.
+- If `gnome-extensions enable` says it does not exist, the shell has not
+  scanned the new installation yet; wait a few seconds and retry.
+- If the log has an `etkin · ızgara (x, y)` line the pet is being drawn but
+  may be off screen: right-click → **Reset position**, or
   `dconf reset -f /org/gnome/shell/extensions/claude-pet/`.
-- Log'da `animasyonlar yüklenemedi` varsa varlık dosyası bozuk; o durumda pet
-  **hiç görünmüyor** (aşağıdaki bilinen eksiklere bak).
+- If the log says `animasyonlar yüklenemedi` the asset file is broken, and in
+  that case the pet **does not appear at all** (see Known gaps).
 
-**"Uzantının tercihleri yok" diyor, ayarlar penceresi açılmıyor.**
+**It says "this extension has no preferences" and the settings window will not
+open.**
 
-Kabuk `hasPrefs` bilgisini eklentiyi **ilk taradığı anda** (oturum açılışında)
-hesaplıyor ve bir daha güncellemiyor. `prefs.js` sonradan geldiyse — ya da
-kurulum sırasında kabuk yarım bir dizin gördüyse — bu bayrak `false` takılı
-kalıyor. `disable`/`enable` düzeltmiyor.
+The shell computes `hasPrefs` **the first time it scans the extension** (at
+session start) and never updates it. If `prefs.js` arrived later — or the
+shell caught a half-written directory during install — the flag stays stuck at
+`false`. `disable`/`enable` does not fix it.
 
 ```sh
 gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
   --method org.gnome.Shell.Extensions.GetExtensionInfo claude-pet@eymistaken.local
 ```
 
-Çıktıda `'hasPrefs': <false>` ama diskte `prefs.js` varsa: **oturumu kapatıp
-aç.** Wayland'de kabuğu yeniden başlatmanın başka yolu yok.
+If the output has `'hasPrefs': <false>` while `prefs.js` is on disk: **log out
+and back in.** On Wayland there is no other way to restart the shell.
 
-**Pet var ama tepki vermiyor.**
+**The pet is there but does not react.**
 
 ```sh
-make hooks-status          # 7 girdi ve inbox'ta bekleyen olay var mı
+make hooks-status          # 7 entries, and anything waiting in the inbox?
 ls ~/.local/state/claude-pet/inbox/
 ```
 
-- Girdi sayısı 0 ise `make hooks`.
-- Açık bir Claude Code oturumu eski ayarları okumuş olabilir; yeni oturum aç.
-- inbox'ta dosyalar birikiyor ama pet kımıldamıyorsa `Gio.FileMonitor`
-  kurulamamış olabilir: `cat /proc/sys/fs/inotify/max_user_instances` ve
-  logda `inbox izleyicisi kurulamadı` satırı. Limit dolduğunda izleyici
-  **sessizce** çalışmıyor.
-- Pet duraklatılmış olabilir: sağ tık → Devam et.
+- If the entry count is 0, run `make hooks`.
+- An already-open Claude Code session may have read the old settings; start a
+  new one.
+- If files pile up in the inbox but the pet does not move, `Gio.FileMonitor`
+  may have failed to install: check
+  `cat /proc/sys/fs/inotify/max_user_instances` and look for
+  `inbox izleyicisi kurulamadı` in the log. When the limit is exhausted the
+  watcher **silently** does nothing.
+- The pet may be paused: right-click → Resume.
 
-**Kod değiştirdim, yansımıyor.** GNOME 45+ ESM modüllerini önbelleğe alıyor;
-`disable`/`enable` JS'i yeniden okumuyor (ölçüldü: `make install` sonrası
-kapat/aç, logda hâlâ eski sürümün satırlarını basıyor). Kabuk modülü
-eklentiyi **ilk etkinleştirdiğinde** okuyor; o andan sonra değişen dosya
-ancak oturum yeniden açılınca geçerli oluyor. Geliştirme bu yüzden iç içe
-oturumda yapılıyor: `make nested`.
+**I changed the code and nothing happened.** GNOME 45+ caches ESM modules;
+`disable`/`enable` does not re-read the JS (measured: after `make install`,
+toggling off and on still logs lines from the old version). The shell reads
+the module **the first time it enables the extension**; after that a changed
+file only takes effect when the session restarts. That is why development
+happens in a nested session: `make nested`.
 
-## Bilinen eksikler
+## Known gaps
 
-- **Bozuk varlık dosyasında pet hiç görünmüyor.** `animations.js` boş
-  varsayılana düşüp `console.warn` basıyor; ekranda görünür bir uyarı yok.
-- **Uyku pozu yok.** `sleep-timeout` ayarı pet'in "çalışıyor" saymayı
-  bırakmasını sağlıyor, ama varlıkta `sleep` klibi olmadığı için pet uyumuyor,
-  düz duruşta kalıyor. Klip eklenirse kod tarafında değişiklik gerekmiyor.
-- **Claude açıkken unredirect kapalı tutuluyor**, yani tam ekran oyun/video
-  doğrudan ekrana basılamıyor. Görünürlüğün bedeli bu. Claude kapalıyken
-  bedel de yok.
-- **Pet'in Claude kapalıyken de görünmesini isteyenler için ayar yok.**
-  Ayardaki anahtar pet'i tamamen kapatıyor, "her zaman göster" diye bir
-  seçenek yok: ölçüt sabit, Claude çalışmıyorsa pet yok.
-- **Ekran ölçeği (`scale_factor`) canlı izlenmiyor.** Ekran ölçeğini
-  %100 → %200 yaparsan pet, bir sonraki ayar değişikliğine kadar eski hücre
-  boyutunda kalıyor.
-- **Geçiş klibi sırasında durum değişirse küçük bir sıçrama** olabiliyor
-  (0.5–1.3 sn'lik pencere). Kalan dizi bırakılıp yeniden planlanıyor.
-- **Sağ tık menüsü açıkken sol tık altına geçmiyor**, menüyü kapatıyor. Bu
-  GNOME'un kendi menü davranışı (modal grab), eklentinin kısıtı değil.
-- **X11'de denenmedi.**
+- **With a broken asset file the pet never appears.** `animations.js` falls
+  back to an empty default and prints `console.warn`; there is no visible
+  warning on screen.
+- **There is no sleep pose.** The `sleep-timeout` setting makes the pet stop
+  counting as working, but since the asset has no `sleep` clip the pet does
+  not sleep, it stays in the neutral stance. Adding the clip needs no code
+  change.
+- **Unredirect is held off while Claude is open**, so fullscreen video and
+  games cannot be scanned out directly. That is the price of visibility.
+  While Claude is closed there is no price.
+- **There is no setting for people who want the pet visible while Claude is
+  closed.** The switch turns the pet off entirely; there is no "always show".
+  The criterion is fixed: no Claude, no pet.
+- **Screen scale (`scale_factor`) is not watched live.** Change the screen
+  scale from 100% → 200% and the pet keeps the old cell size until the next
+  settings change.
+- **A small jump is possible if the state changes during a transition clip**
+  (a 0.5–1.3 s window). The remaining sequence is dropped and replanned.
+- **A left click does not pass through while the right-click menu is open**,
+  it closes the menu. That is GNOME's own menu behaviour (modal grab), not a
+  limitation of the extension.
+- **Untested on X11.**
 
-## Geliştirme
+## Development
 
-İki test kancası:
-
-```sh
-CLAUDE_PET_STATE_DIR=/tmp/pet-test   # hook'ların olay bıraktığı dizin
-CLAUDE_PET_PROCESSES=sleep           # "Claude açık mı" ölçütünü değiştirir
-```
-
-İkincisi olmadan bu özelliği denemek, deneyen kişinin kendi Claude'unu
-kapatmasını gerektirirdi — ki Claude Code'un kendisi de o Claude.
+Two test hooks:
 
 ```sh
-make nested      # izole test oturumu (gerçek masaüstüne dokunmaz)
-make nested-log  # o oturumun logu
-make preview     # kareleri kabuğa hiç dokunmadan bağımsız pencerede çiz
-make replay      # hook → durum → klip → konum mantığını izole olarak sına
-make check       # paket kontrolü
-make pack        # dağıtılabilir .zip
-make gif         # docs/pet.gif'i yeniden üret
+CLAUDE_PET_STATE_DIR=/tmp/pet-test   # where the hooks drop events
+CLAUDE_PET_PROCESSES=cpetsahte       # changes the "is Claude open" criterion
 ```
 
-Sanat üzerinde çalışırken `make preview`, `make nested` değil — çok daha hızlı.
+Without the second one, trying this feature out would require whoever is
+testing to close their own Claude — and Claude Code itself is that Claude.
+Two things learned the hard way: **`sleep` cannot be used as a fake Claude**
+(someone else's `sleep` may be running at any moment — one verification run
+read a false "Claude open" because of it), and the name cannot exceed 15
+characters, because `comm` is truncated.
 
-Yol haritası `docs/PLAN.md`'de, faz faz. Her fazın Claude Code'a verilecek
-hazır komutu `prompts/` altında, ne yapıldığı `docs/ILERLEME.md`'de.
-
-Çalışmaya başlamak için Claude Code'a tek cümle yeter:
-
+```sh
+make nested      # isolated test session (does not touch the real desktop)
+make nested-log  # that session's log
+make preview     # draw frames in a standalone window, never touching the shell
+make replay      # exercise the hook → state → clip → position logic in isolation
+make check       # package check
+make pack        # distributable .zip
+make gif         # regenerate docs/pet.gif
 ```
-UYGULA.md dosyasını uygula
-```
 
-Nerede kalındığını `docs/ILERLEME.md`'den okur, sıradaki fazı uygular, biter
-ve durur.
+`make replay` runs four test files (110 assertions). To run one:
+`gjs -m tests/director.js`.
 
-## Lisans ve karakter hakkında
+When working on the art use `make preview`, not `make nested` — it is much
+faster.
 
-Kod MIT ile lisanslı — `LICENSE`.
+The AppImage build lives on the [`appimage` branch](https://github.com/Eymistaken/claude-pet/tree/appimage).
+Contributor-facing architecture notes live in `CLAUDE.md` (Turkish).
 
-Maskot Anthropic'in Claude Code karakteri; bu proje onunla ilgili **resmî
-değil**, bağımsız bir hayran çalışması. Karakterin görselleri üzerinde bir hak
-iddia edilmiyor. Anthropic isterse kaldırılır.
+The roadmap is in `docs/PLAN.md`, phase by phase. Each phase's ready-made
+prompt for Claude Code is under `prompts/`, and what was actually done — with
+the measurements behind each decision — is in `docs/ILERLEME.md`.
+
+## Licence, and about the character
+
+The code is MIT licensed — see `LICENSE`.
+
+The mascot is Anthropic's Claude Code character. This project is **not
+official** and is an independent piece of fan work. No claim is made over the
+character's artwork. It will be taken down if Anthropic asks.
