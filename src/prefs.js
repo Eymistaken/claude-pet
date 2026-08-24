@@ -29,7 +29,7 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
  * ekran içinde tutuyor.
  */
 function monitorEtiketleri() {
-    const etiketler = ['Birincil monitör'];
+    const etiketler = ['Primary monitor'];
 
     try {
         const monitors = Gdk.Display.get_default()?.get_monitors();
@@ -37,7 +37,7 @@ function monitorEtiketleri() {
         for (let i = 0; i < n; i++) {
             const m = monitors.get_item(i);
             const ad = m?.connector ?? m?.model ?? '';
-            etiketler.push(ad ? `Monitör ${i + 1} — ${ad}` : `Monitör ${i + 1}`);
+            etiketler.push(ad ? `Monitor ${i + 1} — ${ad}` : `Monitor ${i + 1}`);
         }
     } catch (error) {
         logError(error, 'claude-pet: monitör listesi okunamadı');
@@ -70,8 +70,8 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
 
         const acik = new Adw.SwitchRow({
             title: 'Pet',
-            subtitle: 'Kapatılınca maskot hiç görünmez — Claude çalışıyor olsa ' +
-                'bile. Geri açmak buradan; ekranda tıklanacak bir pet olmuyor.',
+            subtitle: 'Turned off, the mascot never appears — even while Claude ' +
+                'is running. Turn it back on here; there is no pet on screen to click.',
         });
         settings.bind('enabled', acik, 'active', Gio.SettingsBindFlags.DEFAULT);
         genel.add(acik);
@@ -81,14 +81,14 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
         // ------------------------------------------------------------ görünüm
 
         const gorunum = new Adw.PreferencesGroup({
-            title: 'Görünüm',
-            description: 'Maskotun ekranda nasıl göründüğü.',
+            title: 'Appearance',
+            description: 'How the mascot looks on screen.',
         });
 
         const boyut = new Adw.SpinRow({
-            title: 'Boyut',
-            subtitle: 'Bir sprite hücresinin piksel kenarı. Tam sayı, yani ' +
-                'büyütmek bulanıklaştırmıyor.',
+            title: 'Size',
+            subtitle: 'Pixel edge of one sprite cell. An integer, so scaling ' +
+                'up does not blur.',
             adjustment: new Gtk.Adjustment({
                 lower: 1, upper: 8, step_increment: 1, page_increment: 1,
             }),
@@ -98,7 +98,7 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
 
         const laptop = new Adw.SwitchRow({
             title: 'Laptop',
-            subtitle: 'Kod yazarken çıkan laptop çizilsin mi.',
+            subtitle: 'Whether to draw the laptop that comes out while typing.',
         });
         settings.bind('laptop-enabled', laptop, 'active', Gio.SettingsBindFlags.DEFAULT);
         gorunum.add(laptop);
@@ -108,14 +108,14 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
         // ----------------------------------------------------------- davranış
 
         const davranis = new Adw.PreferencesGroup({
-            title: 'Davranış',
-            description: 'Pet neye, ne zaman tepki versin.',
+            title: 'Behaviour',
+            description: 'What the pet reacts to, and when.',
         });
 
         const uyku = new Adw.SpinRow({
-            title: 'Boşta kalma süresi',
-            subtitle: 'Saniye. Bu kadar süre hiçbir şey olmazsa pet çalışmayı ' +
-                'bırakmış sayılır. 0: kapalı.',
+            title: 'Idle timeout',
+            subtitle: 'Seconds. If nothing happens for this long, the pet ' +
+                'stops counting as working. 0: off.',
             adjustment: new Gtk.Adjustment({
                 lower: 0, upper: 3600, step_increment: 30, page_increment: 60,
             }),
@@ -124,9 +124,9 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
         davranis.add(uyku);
 
         const bildirim = new Adw.SwitchRow({
-            title: 'Girdi beklerken bildirim',
-            subtitle: 'Claude Code soru sorduğunda ya da izin istediğinde ' +
-                'masaüstü bildirimi gönder.',
+            title: 'Notify while waiting for input',
+            subtitle: 'Send a desktop notification when Claude Code asks a ' +
+                'question or requests permission.',
         });
         settings.bind('attention-notify', bildirim, 'active', Gio.SettingsBindFlags.DEFAULT);
         davranis.add(bildirim);
@@ -136,16 +136,16 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
         // -------------------------------------------------------------- konum
 
         const konum = new Adw.PreferencesGroup({
-            title: 'Konum',
-            description: 'Pet sürüklenerek taşınır; buradaki ayarlar onu ' +
-                'nereye koyacağını söyler.',
+            title: 'Position',
+            description: 'The pet is moved by dragging; these settings say ' +
+                'where to put it.',
         });
 
         const etiketler = monitorEtiketleri();
         const monitor = new Adw.ComboRow({
-            title: 'Monitör',
-            subtitle: 'Pet bu monitörde durur. Monitör çıkarılırsa birincile ' +
-                'düşer, geri takılınca geri döner.',
+            title: 'Monitor',
+            subtitle: 'The pet sits on this monitor. Falls back to the primary ' +
+                'if it is unplugged, and returns when it comes back.',
             model: new Gtk.StringList({strings: etiketler}),
         });
 
@@ -167,9 +167,9 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
         bagla(settings, 'changed::monitor-index', monitorOku);
         konum.add(monitor);
 
-        const sifirlaSatiri = new Adw.ActionRow({title: 'Konumu sıfırla'});
+        const sifirlaSatiri = new Adw.ActionRow({title: 'Reset position'});
         const sifirla = new Gtk.Button({
-            label: 'Sıfırla',
+            label: 'Reset',
             valign: Gtk.Align.CENTER,
         });
         sifirlaSatiri.add_suffix(sifirla);
@@ -181,8 +181,8 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
             const x = settings.get_int('position-x');
             const y = settings.get_int('position-y');
             sifirlaSatiri.subtitle = x === -1 && y === -1
-                ? 'Kayıtlı konum yok — pet sağ altta duruyor.'
-                : `Kayıtlı: monitörün sol üstünden (${x}, ${y}) piksel.`;
+                ? 'No saved position — the pet sits in the bottom right.'
+                : `Saved: (${x}, ${y}) pixels from the monitor's top left.`;
         };
         kayitYaz();
         bagla(settings, 'changed::position-x', kayitYaz);
