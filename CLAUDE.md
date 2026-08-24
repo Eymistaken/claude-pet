@@ -54,8 +54,12 @@ Geliştirme makinesi: Zorin OS 18.1 (Ubuntu 24.04) · GNOME Shell 46.0 ·
    — aşağıdaki "Girdi geçirgenliği" bölümüne bak; yeni bir görsel parça
    eklerken ikisini de gözet.
 
-6. **Türkçe yaz.** Kod yorumları, commit mesajları ve açıklamalar Türkçe.
-   Değişken ve fonksiyon adları İngilizce kalsın.
+6. **Türkçe yaz — ama README'ler İNGİLİZCE.** Kod yorumları, commit
+   mesajları, `docs/`, `prompts/` ve bu dosya Türkçe. Değişken ve fonksiyon
+   adları İngilizce kalsın. `README.md` ve `README-appimage.md` **tamamen
+   İngilizce** (dışarıya bakan yüz); onları Türkçeye çevirme. İçlerinde geçen
+   Türkçe log satırları ve dosya adları alıntıdır — koddaki gerçek metin o,
+   çevrilmez.
 
 ## Komutlar
 
