@@ -49,11 +49,19 @@ Eklenti kimliği: `claude-pet@eymistaken.local`
    `reactive: false` ile ekle. Wayland'de geçirgenliği sağlayan şey ikincisi;
    birincisi **hiçbir şey yapmıyor** (ölçüldü — `README.md`'deki nota bak).
 
-6. **Türkçe yaz — ama README İNGİLİZCE.** Kod yorumları, commit mesajları,
-   `docs/`, `prompts/` ve bu dosya Türkçe. Değişken ve fonksiyon adları
-   İngilizce kalsın. `README.md` **tamamen İngilizce** (dışarıya bakan yüz);
-   onu Türkçeye çevirme. İçinde geçen Türkçe log satırları alıntıdır —
-   koddaki gerçek metin o, çevrilmez.
+6. **Dil: içeride Türkçe, KULLANICIYA GÖRÜNEN HER ŞEY İNGİLİZCE.**
+
+   | Türkçe | İngilizce |
+   |---|---|
+   | kod yorumları, commit mesajları | `README.md` |
+   | `docs/`, `prompts/`, bu dosya | ayarlar penceresi (`src/prefs.js`) |
+   | `console.log/warn/error` — log satırları | sağ tık menüsü, `Main.notify` bildirimi |
+   | gschema `<summary>`/`<description>` | |
+
+   Değişken ve fonksiyon adları karışık ama **kullanıcıya görünmüyor**.
+   README'de geçen Türkçe log satırları alıntıdır; koddaki gerçek metin o,
+   çevrilmez. README'deki ayar tablosuyla `prefs.js`teki etiketler **birebir
+   aynı olmalı**.
 
 7. **Faz dışına çıkma.** Prompt dosyası hangi dosyalara dokunulacağını
    söylüyor. Başka bir yerde iyileştirme fırsatı görürsen yap deme, not düş.
