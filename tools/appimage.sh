@@ -171,7 +171,7 @@ cat > "$APPDIR/io.github.eymistaken.ClaudePet.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
 Name=Claude Pet
-Comment=Claude Code durumunu masaüstünde gösteren maskot
+Comment=Desktop mascot that shows what Claude Code is doing
 Exec=claude-pet
 Icon=claude-pet
 Terminal=false

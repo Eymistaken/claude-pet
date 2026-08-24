@@ -27,14 +27,14 @@ import * as Entegrasyon from './entegrasyon.js';
 /** Monitor listesi. Ayar, listedeki SIRA numarasini sakliyor; etikette
  *  baglanti adi da yaziyor ki yanlis secim goze carpsin. */
 function monitorEtiketleri() {
-    const etiketler = ['Birincil monitör'];
+    const etiketler = ['Primary monitor'];
     try {
         const monitors = Gdk.Display.get_default()?.get_monitors();
         const n = monitors?.get_n_items() ?? 0;
         for (let i = 0; i < n; i++) {
             const m = monitors.get_item(i);
             const ad = m?.connector ?? m?.model ?? '';
-            etiketler.push(ad ? `Monitör ${i + 1} — ${ad}` : `Monitör ${i + 1}`);
+            etiketler.push(ad ? `Monitor ${i + 1} — ${ad}` : `Monitor ${i + 1}`);
         }
     } catch (error) {
         console.warn(`claude-pet: monitör listesi okunamadı: ${error}`);
@@ -84,8 +84,8 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
         const grup = new Adw.PreferencesGroup();
         const acik = new Adw.SwitchRow({
             title: 'Pet',
-            subtitle: 'Kapatılınca maskot hiç görünmez — Claude çalışıyor olsa ' +
-                'bile. Süreç yoklaması da durur.',
+            subtitle: 'Turned off, the mascot never appears — even while Claude ' +
+                'is running. Process polling stops too.',
         });
         this._settings.bind('enabled', acik, 'active', Gio.SettingsBindFlags.DEFAULT);
         grup.add(acik);
@@ -94,14 +94,14 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
 
     _gorunumGrubu() {
         const grup = new Adw.PreferencesGroup({
-            title: 'Görünüm',
-            description: 'Maskotun ekranda nasıl göründüğü.',
+            title: 'Appearance',
+            description: 'How the mascot looks on screen.',
         });
 
         const boyut = new Adw.SpinRow({
-            title: 'Boyut',
-            subtitle: 'Bir sprite hücresinin piksel kenarı. Tam sayı, yani ' +
-                'büyütmek bulanıklaştırmıyor.',
+            title: 'Size',
+            subtitle: 'Pixel edge of one sprite cell. An integer, so scaling ' +
+                'up does not blur.',
             adjustment: new Gtk.Adjustment({
                 lower: 1, upper: 8, step_increment: 1, page_increment: 1,
             }),
@@ -111,7 +111,7 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
 
         const laptop = new Adw.SwitchRow({
             title: 'Laptop',
-            subtitle: 'Kod yazarken çıkan laptop çizilsin mi.',
+            subtitle: 'Whether to draw the laptop that comes out while typing.',
         });
         this._settings.bind('laptop-enabled', laptop, 'active',
             Gio.SettingsBindFlags.DEFAULT);
@@ -122,14 +122,14 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
 
     _davranisGrubu() {
         const grup = new Adw.PreferencesGroup({
-            title: 'Davranış',
-            description: 'Pet neye, ne zaman tepki versin.',
+            title: 'Behaviour',
+            description: 'What the pet reacts to, and when.',
         });
 
         const uyku = new Adw.SpinRow({
-            title: 'Boşta kalma süresi',
-            subtitle: 'Saniye. Bu kadar süre hiçbir şey olmazsa pet çalışmayı ' +
-                'bırakmış sayılır. 0: kapalı.',
+            title: 'Idle timeout',
+            subtitle: 'Seconds. If nothing happens for this long, the pet ' +
+                'stops counting as working. 0: off.',
             adjustment: new Gtk.Adjustment({
                 lower: 0, upper: 3600, step_increment: 30, page_increment: 60,
             }),
@@ -139,9 +139,9 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
         grup.add(uyku);
 
         const bildirim = new Adw.SwitchRow({
-            title: 'Girdi beklerken bildirim',
-            subtitle: 'Claude Code soru sorduğunda ya da izin istediğinde ' +
-                'masaüstü bildirimi gönder.',
+            title: 'Notify while waiting for input',
+            subtitle: 'Send a desktop notification when Claude Code asks a ' +
+                'question or requests permission.',
         });
         this._settings.bind('attention-notify', bildirim, 'active',
             Gio.SettingsBindFlags.DEFAULT);
@@ -152,16 +152,16 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
 
     _konumGrubu() {
         const grup = new Adw.PreferencesGroup({
-            title: 'Konum',
-            description: 'Pet sürüklenerek taşınır; buradaki ayarlar onu ' +
-                'nereye koyacağını söyler.',
+            title: 'Position',
+            description: 'The pet is moved by dragging; these settings say ' +
+                'where to put it.',
         });
 
         const etiketler = monitorEtiketleri();
         const monitor = new Adw.ComboRow({
-            title: 'Monitör',
-            subtitle: 'Pet bu monitörde durur. Monitör çıkarılırsa birincile ' +
-                'düşer, geri takılınca geri döner.',
+            title: 'Monitor',
+            subtitle: 'The pet sits on this monitor. Falls back to the primary ' +
+                'if it is unplugged, and returns when it comes back.',
             model: new Gtk.StringList({strings: etiketler}),
         });
 
@@ -182,8 +182,8 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
         this._bagla(this._settings, 'changed::monitor-index', monitorOku);
         grup.add(monitor);
 
-        const satir = new Adw.ActionRow({title: 'Konumu sıfırla'});
-        const dugme = new Gtk.Button({label: 'Sıfırla', valign: Gtk.Align.CENTER});
+        const satir = new Adw.ActionRow({title: 'Reset position'});
+        const dugme = new Gtk.Button({label: 'Reset', valign: Gtk.Align.CENTER});
         satir.add_suffix(dugme);
         satir.activatable_widget = dugme;
 
@@ -191,8 +191,8 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
             const x = this._settings.get_int('position-x');
             const y = this._settings.get_int('position-y');
             satir.subtitle = x === -1 && y === -1
-                ? 'Kayıtlı konum yok — pet sağ altta duruyor.'
-                : `Kayıtlı: monitörün sol üstünden (${x}, ${y}) piksel.`;
+                ? 'No saved position — the pet sits in the bottom right.'
+                : `Saved: (${x}, ${y}) pixels from the monitor's top left.`;
         };
         kayitYaz();
         this._bagla(this._settings, 'changed::position-x', kayitYaz);
@@ -210,13 +210,13 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
     // yonetimiydi. AppImage'da make yok.
     _sistemGrubu() {
         const grup = new Adw.PreferencesGroup({
-            title: 'Sistem',
-            description: `Ayarlar: ${ayarDosyasi()}`,
+            title: 'System',
+            description: `Settings file: ${ayarDosyasi()}`,
         });
 
         const autostart = new Adw.SwitchRow({
-            title: 'Sistemle birlikte başlat',
-            subtitle: 'Oturum açılınca pet arka planda hazır olsun.',
+            title: 'Start with the system',
+            subtitle: 'Have the pet ready in the background when you log in.',
             active: Entegrasyon.autostartAcikMi(),
         });
         this._bagla(autostart, 'notify::active',
@@ -224,9 +224,9 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
         grup.add(autostart);
 
         const menu = new Adw.SwitchRow({
-            title: 'Uygulama menüsünde göster',
-            subtitle: 'Menüye bir girdi ve simge ekler; bildirimlerin simgesi ' +
-                'de buradan geliyor.',
+            title: 'Show in the application menu',
+            subtitle: 'Adds a menu entry and an icon; the notification icon ' +
+                'comes from here too.',
             active: Entegrasyon.masaustuGirdisiVarMi(),
         });
         this._bagla(menu, 'notify::active',
@@ -236,8 +236,8 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
         // Hook'lar olmadan pet hicbir sey duymaz: durum bilgisinin TEK kaynagi
         // Claude Code'un hook'lari.
         const hook = new Adw.ActionRow({
-            title: 'Claude Code hook’ları',
-            subtitle: 'Durum bilgisi buradan geliyor. ~/.claude/settings.json',
+            title: 'Claude Code hooks',
+            subtitle: 'This is where the state comes from. ~/.claude/settings.json',
         });
         const hookDugme = new Gtk.Button({valign: Gtk.Align.CENTER});
         hook.add_suffix(hookDugme);
@@ -245,17 +245,17 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
         const hookTazele = () => {
             const n = Entegrasyon.hookSayisi();
             if (n > 0) {
-                hook.subtitle = `${n} girdi kurulu · ~/.claude/settings.json`;
-                hookDugme.label = 'Kaldır';
+                hook.subtitle = `${n} entries installed · ~/.claude/settings.json`;
+                hookDugme.label = 'Remove';
             } else {
-                hook.subtitle = 'Kurulu değil — pet Claude’un ne yaptığını ' +
-                    'duyamaz. ~/.claude/settings.json';
-                hookDugme.label = 'Kur';
+                hook.subtitle = 'Not installed — the pet cannot hear what ' +
+                    'Claude is doing. ~/.claude/settings.json';
+                hookDugme.label = 'Install';
             }
         };
         hookTazele();
         this._bagla(hookDugme, 'clicked', () => {
-            if (hookDugme.label === 'Kur')
+            if (hookDugme.label === 'Install')
                 Entegrasyon.hooklariKur();
             else
                 Entegrasyon.hooklariKaldir();

@@ -72,10 +72,10 @@ class Uygulama extends Adw.Application {
         // pencere ekranin ustune cakilamiyor. O masaustunun cozumu bu depodaki
         // GNOME Shell eklentisi.
         if (!LayerShell.is_supported()) {
-            printerr('claude-pet: bu kompozitor wlr-layer-shell protokolunu ' +
-                'desteklemiyor.\n' +
-                '  KDE Plasma (Wayland), Sway, Hyprland ve COSMIC destekliyor.\n' +
-                '  GNOME kullaniyorsan bu depodaki GNOME Shell eklentisini kur:\n' +
+            printerr('claude-pet: this compositor does not support the ' +
+                'wlr-layer-shell protocol.\n' +
+                '  KDE Plasma (Wayland), Sway, Hyprland and COSMIC do.\n' +
+                '  On GNOME, install the GNOME Shell extension from this repo:\n' +
                 '  https://github.com/Eymistaken/claude-pet');
             System.exit(2);
         }
@@ -221,10 +221,10 @@ class Uygulama extends Adw.Application {
      *  GMenuModel canli, yani acik bir menu de guncelleniyor. */
     _menuyuTazele() {
         this._menuModeli.remove_all();
-        this._menuModeli.append(this._paused ? 'Devam et' : 'Duraklat', 'app.duraklat');
-        this._menuModeli.append('Ayarlar', 'app.ayarlar');
-        this._menuModeli.append('Konumu sıfırla', 'app.konum-sifirla');
-        this._menuModeli.append('Çık', 'app.cik');
+        this._menuModeli.append(this._paused ? 'Resume' : 'Pause', 'app.duraklat');
+        this._menuModeli.append('Settings', 'app.ayarlar');
+        this._menuModeli.append('Reset position', 'app.konum-sifirla');
+        this._menuModeli.append('Quit', 'app.cik');
     }
 
     /** Menu acikken animasyon DURUYOR (kare donuyor, zamanlayici yok).
@@ -321,7 +321,7 @@ class Uygulama extends Adw.Application {
         try {
             const bildirim = new Gio.Notification();
             bildirim.set_title('Claude Code');
-            bildirim.set_body('Girdi bekleniyor.');
+            bildirim.set_body('Waiting for input.');
             this.send_notification('claude-pet-dikkat', bildirim);
         } catch (error) {
             console.warn(`${LOG} bildirim gonderilemedi: ${error}`);
@@ -347,9 +347,9 @@ class Uygulama extends Adw.Application {
 // Wayland disinda hic baslamiyoruz: GTK'nin "cannot open display" hatasi
 // yerine ne yapilmasi gerektigini soyleyen bir cumle daha faydali.
 if (!GLib.getenv('WAYLAND_DISPLAY')) {
-    printerr('claude-pet: Wayland oturumu bulunamadi.\n' +
-        '  Bu surum yalnizca Wayland`de calisiyor (wlr-layer-shell).\n' +
-        '  X11 oturumundaysan oturumu Wayland olarak ac.');
+    printerr('claude-pet: no Wayland session found.\n' +
+        '  This build only runs on Wayland (wlr-layer-shell).\n' +
+        '  If you are in an X11 session, log in with a Wayland one instead.');
     System.exit(2);
 }
 
