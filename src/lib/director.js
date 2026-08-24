@@ -15,7 +15,10 @@
  *    1.73 sn) ve karşılığında hareket kopuk değil akıcı görünüyor.
  *    Tek istisna rate limit: orada anilik BİLEREK var.
  *
- * DURDURMANIN İKİ TÜRÜ VAR (Faz 5) ve ikisi de yeni klip başlatmıyor:
+ * DURDURMANIN ÜÇ TÜRÜ VAR ve üçü de yeni klip başlatmıyor:
+ *   claude kapalı — pet'in var olma şartı. Claude ne masaüstü uygulaması ne
+ *     de terminalde çalışıyorsa gösterilecek bir şey yok; aktörler gizleniyor
+ *     (bunu çağıran yapıyor), yönetmen de sıraya girmiyor.
  *   duraklatma — kullanıcı istedi. Pet NÖTR poza geçiyor (`idle`), çünkü
  *     "duraklattım" demek "kutuya girmiş bir maskot" değil, dinlenen bir
  *     maskot demek. Takip sürüyor: hedef durum kaydediliyor, devam edilince
@@ -65,9 +68,10 @@ export class Director {
 
         this._sleepId = 0;
 
-        // İki ayrı sebeple durmuş olabiliriz; ikisi de yeni klip başlatmıyor.
+        // Üç ayrı sebeple durmuş olabiliriz; üçü de yeni klip başlatmıyor.
         this._paused = false;
         this._menuOpen = false;
+        this._absent = false;
     }
 
     get state() {
@@ -80,7 +84,7 @@ export class Director {
 
     /** Yeni klip başlatmanın yasak olduğu her durum. */
     get _held() {
-        return this._paused || this._menuOpen;
+        return this._paused || this._menuOpen || this._absent;
     }
 
     /** Açılış pozu. */
@@ -160,17 +164,37 @@ export class Director {
         if (paused === this._paused)
             return;
         this._paused = paused;
+        this._tutamak(paused, 'duraklatıldı · nötr kare', 'devam');
+    }
 
-        if (paused) {
+    /** Claude çalışmıyor: pet yok sayılıyor.
+     *
+     * Duraklatmadan tek farkı sebebi; davranışı aynı — nötr kareye dönüp
+     * zamanlayıcıları bırakmak. Aktörleri gizleyen taraf `extension.js`,
+     * çünkü aktörler onun.
+     */
+    setAbsent(absent) {
+        absent = !!absent;
+        if (absent === this._absent)
+            return;
+        this._absent = absent;
+        this._tutamak(absent, 'claude kapalı · pet çekildi', 'claude açık');
+    }
+
+    /** Tutamağa girildi/çıkıldı. Girişte `_current` NÖTR sayılıyor, çünkü
+     *  ekranda gerçekten o poz var (ya da hiçbir şey yok); çıkışta
+     *  `sequence(IDLE → hedef)` doğru geçişi kendiliğinden kuruyor. */
+    _tutamak(tutuldu, girisMesaji, cikisMesaji) {
+        if (tutuldu) {
             this._disarmSleep();
             this._queue = [];
             this._current = 'IDLE';
             this._playClip(STATE_ANIM.IDLE, true);
-            console.log(`${LOG} yönetmen: duraklatıldı · nötr kare`);
+            console.log(`${LOG} yönetmen: ${girisMesaji}`);
             return;
         }
 
-        console.log(`${LOG} yönetmen: devam · hedef ${this._target}`);
+        console.log(`${LOG} yönetmen: ${cikisMesaji} · hedef ${this._target}`);
         this._sync();
     }
 

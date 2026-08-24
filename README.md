@@ -125,6 +125,34 @@ bileşikleme yolundan geçiyor. Bu, oyunlarda birkaç kare/saniye demek olabilir
 Pet'i tam ekranda görmek istemiyorsan `make disable` (ya da sağ tık →
 Duraklat değil, tamamen kapatmak gerekiyor) unredirect'i de geri veriyor.
 
+## Pet ne zaman var
+
+Pet, Claude çalışırken var; çalışmıyorken hiç yok. "Çalışmak" ekranda görünmek
+değil: masaüstü uygulaması arka planda, küçültülmüş, başka pencerenin altında
+olabilir — süreç ayaktaysa pet de ayakta. Terminalde açılan Claude Code de
+aynı şekilde sayılıyor.
+
+| Ne açık | Pet |
+|---|---|
+| Claude masaüstü uygulaması (arka planda bile) | var |
+| Terminalde `claude` | var |
+| İkisi birden | var |
+| Hiçbiri | **yok** — aktörler gizli, zamanlayıcı yok, unredirect geri verilmiş |
+
+Ölçüt **pencere değil süreç**: `/proc` içinde `claude-desktop` ya da `claude`
+adında bir süreç var mı. Pencereye bakan bir yöntem (`Shell.AppSystem`)
+penceresi olmayan uygulamayı ve terminalde açılan Claude Code'u kaçırırdı.
+
+Süreç doğumu/ölümü için ayrıcalık istemeyen bir olay kaynağı olmadığından
+burada yoklama kaçınılmaz. Maliyet iki kademeli: Claude **açıkken** yalnızca
+bulunan sürecin hâlâ yaşadığına bakılıyor (tek dosya, ~0.05 ms, 2 saniyede
+bir); **kapalıyken** tam tarama gerekiyor (365 süreç, ~5.7 ms) ve o yüzden 8
+saniyede bir soruluyor. Claude Code tarafında gecikmenin telafisi de var: ilk
+hook olayı geldiği anda yoklama beklenmeden bakılıyor.
+
+Pet kapalıyken **unredirect de geri veriliyor**, yani Claude açık değilken tam
+ekran oyunun bileşikleme bedeli de yok.
+
 ## Durum nereden geliyor
 
 Claude Code'un hook'ları. Her olayda küçük bir Python betiği
@@ -229,8 +257,11 @@ oturumda yapılıyor: `make nested`.
 - **Uyku pozu yok.** `sleep-timeout` ayarı pet'in "çalışıyor" saymayı
   bırakmasını sağlıyor, ama varlıkta `sleep` klibi olmadığı için pet uyumuyor,
   düz duruşta kalıyor. Klip eklenirse kod tarafında değişiklik gerekmiyor.
-- **Tam ekranda unredirect kapalı tutuluyor**, yani tam ekran oyun/video
-  doğrudan ekrana basılamıyor. Görünürlüğün bedeli bu.
+- **Claude açıkken unredirect kapalı tutuluyor**, yani tam ekran oyun/video
+  doğrudan ekrana basılamıyor. Görünürlüğün bedeli bu. Claude kapalıyken
+  bedel de yok.
+- **Pet'in her zaman görünmesini isteyenler için ayar yok.** Ölçüt sabit:
+  Claude çalışmıyorsa pet yok.
 - **Ekran ölçeği (`scale_factor`) canlı izlenmiyor.** Ekran ölçeğini
   %100 → %200 yaparsan pet, bir sonraki ayar değişikliğine kadar eski hücre
   boyutunda kalıyor.
@@ -241,6 +272,16 @@ oturumda yapılıyor: `make nested`.
 - **X11'de denenmedi.**
 
 ## Geliştirme
+
+İki test kancası:
+
+```sh
+CLAUDE_PET_STATE_DIR=/tmp/pet-test   # hook'ların olay bıraktığı dizin
+CLAUDE_PET_PROCESSES=sleep           # "Claude açık mı" ölçütünü değiştirir
+```
+
+İkincisi olmadan bu özelliği denemek, deneyen kişinin kendi Claude'unu
+kapatmasını gerektirirdi — ki Claude Code'un kendisi de o Claude.
 
 ```sh
 make nested      # izole test oturumu (gerçek masaüstüne dokunmaz)

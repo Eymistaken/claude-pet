@@ -134,6 +134,8 @@ replay:
 	gjs -m tests/director.js
 	@echo
 	gjs -m tests/layout.js
+	@echo
+	gjs -m tests/presence.js
 
 # Paket kontrolu: "baska bir makinede kurulur mu". Metadata/UUID tutarliligi,
 # varlik dosyasinin bicimi, semanin --strict gecmesi, JS ve Python

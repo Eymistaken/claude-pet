@@ -822,4 +822,61 @@ Doğrulama
       bakması gerekiyor. Logda `tam ekran: unredirect kapatıldı` satırı
       görünüyorsa yol devrede demektir.
 
+## Faz sonrası — pet'in var olma şartı            2026-08-24
+
+Kullanıcı: "Claude uygulaması açık değilse pet kapansın, açıksa açılsın —
+açık olmaktan kastım ekranda olmak değil. Terminalde Claude Code açılınca da
+çıksın, kapanınca (uygulama da kapalıysa) kapansın."
+
+Yapılanlar
+- **`src/lib/presence.js`** (yeni): `/proc` üzerinden "Claude çalışıyor mu"
+  sorusunu cevaplayıp değişince `changed` yayan GObject.
+- `director.js`: üçüncü tutamak `setAbsent()`. Duraklatmayla aynı davranış
+  (nötr kare, sıfır zamanlayıcı), farklı sebep. `_paused`, `_menuOpen` ve
+  `_absent` tek bir `_held` içinde toplanıyor.
+- `extension.js`: varlık aktörlerden hemen sonra, animasyondan ÖNCE
+  kuruluyor — Claude kapalıyken pet tek kare bile görünmüyor. Görünürlük
+  hesabına tek koşul eklendi. Unredirect tutamağı da varlığa bağlandı.
+- `tests/presence.js` (13 iddia) ve `make replay`'e eklendi.
+
+Kararlar ve ölçümler
+- **Pencere değil SÜREÇ.** İlk akla gelen `Shell.AppSystem` (olay tabanlı,
+  bedava) ama uygulamaları PENCERELERİNDEN tanıyor: penceresi olmayan bir
+  uygulamayı ve terminalde açılan `claude`'u (penceresi terminal emülatörünün)
+  kaçırırdı. Kullanıcı "ekranda olmak değil" dediği için ölçüt süreç oldu.
+- **Ölçüldü: iki `comm` değeri yetiyor** — `claude-desktop` (uygulama ve bütün
+  alt süreçleri) ve `claude` (hem terminaldeki hem uygulamanın içindeki Claude
+  Code; bu oturumun kendi süreci `~/.config/Claude/claude-code/2.1.237/claude`
+  olarak göründü). İkisi de `comm`un 15 karakter sınırına sığıyor.
+- **Yoklama kaçınılmaz** (proc connector CAP_NET_ADMIN istiyor), o yüzden
+  ucuzlatıldı: bulunan pid önbelleğe alınıyor. Claude açıkken kontrol tek
+  dosya (~0.05 ms, 2 sn'de bir), kapalıyken tam tarama (365 süreç, ~5.7 ms,
+  8 sn'de bir → tek çekirdeğin ~%0.07'si). Pahalı hal, pet'in zaten gizli
+  olduğu hal.
+- **Zombi ayrımı.** İlk sürüm `/proc/<pid>/comm` okuyordu; test şunu yakaladı:
+  öldürülmüş ama ebeveyni tarafından toplanmamış bir süreç `/proc`'ta adıyla
+  durmaya devam ediyor, yani "Claude kapandı" olayı hiç gelmeyebiliyordu.
+  Artık `/proc/<pid>/stat` okunuyor — aynı maliyetle ad VE durum veriyor,
+  `Z`/`X` olanlar sayılmıyor.
+- **Test kancası `CLAUDE_PET_PROCESSES`.** Bu özelliğin "kapalı" hâlini gerçek
+  kabukta denemek, deneyeni kendi Claude'unu kapatmaya zorlardı.
+
+Doğrulama (nested, `CLAUDE_PET_PROCESSES=sleep`)
+- [x] Hiç süreç yokken pet **yok** → ekran görüntüsü boş, log
+      `claude kapalı · pet çekildi` + `pet gizlendi`
+- [x] Süreç doğunca pet **var** (≤8 sn) → `claude açık · sleep (pid …)` +
+      `pet görünür` + `unredirect kapatıldı`; ekran görüntüsünde maskot yerinde
+- [x] Süreç ölünce pet yine **yok** → `pet gizlendi · claude kapalı`
+- [x] Açılışta Claude kapalıysa pet hiç çizilmiyor (aktörler `visible: false`
+      doğuyor, ilk kare bile görünmüyor)
+- [x] `make replay` 21/21 · 50/50 · 26/26 · 13/13
+- [x] `make check` geçiyor
+
+Notlar
+- Gerçek adlarla (`claude-desktop`, `claude`) doğrulama gerçek oturumda,
+  oturum yeniden açıldıktan sonra yapılabilir: kabuk eklenti modülünü yalnızca
+  ilk etkinleştirmede okuyor.
+- Pet'i Claude kapalıyken de görmek isteyen için ayar YOK; istenirse
+  `laptop-enabled` gibi bir anahtar bir saatlik iş.
+
 <!-- Proje fazları bitti. Yayın: metadata.json'daki version 1'de bırakıldı. -->

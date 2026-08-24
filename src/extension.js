@@ -41,6 +41,7 @@ import {drawLayer} from './lib/sprite.js';
 import {Player} from './lib/player.js';
 import {Tracker} from './lib/tracker.js';
 import {Director} from './lib/director.js';
+import {Presence} from './lib/presence.js';
 import * as Layout from './lib/layout.js';
 
 const LOG = '[claude-pet]';
@@ -108,6 +109,10 @@ export default class ClaudePetExtension extends Extension {
         this._monitorIndex = -1;
         this._chromeYolu = 'addChrome';
         this._unredirectKapali = false;
+        this._presence = null;
+        // Claude kapaliyken pet hic gorunmuyor; ilk cevap gelene kadar da
+        // gorunmesin diye baslangic false.
+        this._present = false;
         // Fazın merkezî iddiası ölçülebilir kalsın: kare sayısı yüzlerceyken
         // boyutlandırma sayısı animasyon değişimi kadar olmalı.
         this._frameCount = 0;
@@ -128,6 +133,14 @@ export default class ClaudePetExtension extends Extension {
 
             this._buildActors();
 
+            // VARLIK KONTROLÜ AKTÖRLERDEN HEMEN SONRA, animasyondan ÖNCE:
+            // `start()` ilk cevabı hemen veriyor, yani Claude kapalıyken pet
+            // tek kare bile görünmüyor.
+            this._presence = new Presence();
+            this._present = this._presence.start();
+            this._connect(this._presence, 'changed',
+                (_p, varMi, ad) => this._applyPresence(varMi, ad));
+
             // Zincir: tracker (ne oluyor) → director (ne oynayacak) →
             // player (ne zaman) → sprite (nasıl çizilecek).
             this._player = new Player(this._sheet.animations,
@@ -146,6 +159,8 @@ export default class ClaudePetExtension extends Extension {
             // yalnızca uykuyu kurmuyor.
             if (this._paused)
                 this._director.setPaused(true);
+            if (!this._present)
+                this._director.setAbsent(true);
             this._director.start();
 
             // Konum animasyondan SONRA: varsayılan yerleşim karakter kutusunun
@@ -157,6 +172,10 @@ export default class ClaudePetExtension extends Extension {
             this._tracker = new Tracker({sleepTimeoutMs: this._readSleepMs()});
             this._connect(this._tracker, 'changed', (_t, durum, rateLimited) => {
                 console.log(`${LOG} durum: ${durum}${rateLimited ? ' · rate limit' : ''}`);
+                // Olay geldiyse bir Claude süreci var demektir; yoklamayı
+                // bekleme, hemen bak. Yeni açılan bir oturumda pet'i anında
+                // getiren şey bu.
+                this._presence?.poke();
                 this._director?.setState(durum, rateLimited);
                 if (durum === 'WAITING')
                     this._notifyAttention();
@@ -164,7 +183,8 @@ export default class ClaudePetExtension extends Extension {
             this._tracker.start();
 
             this._watchSettings();
-            this._holdUnredirect();
+            if (this._present)
+                this._holdUnredirect();
 
             // Monitör takılıp çıkarıldığında ya da çözünürlük değiştiğinde
             // pet ekran dışında kalmasın.
@@ -172,6 +192,7 @@ export default class ClaudePetExtension extends Extension {
                 () => this._onMonitorsChanged());
 
             console.log(`${LOG} etkin · ${this._chromeYolu} · ` +
+                `claude ${this._present ? 'açık' : 'KAPALI (pet gizli)'} · ` +
                 `ızgara (${this._originX}, ${this._originY}) · ` +
                 `monitör ${this._monitorIndex} · hücre ${this._cell}px · ` +
                 `${Object.keys(this._sheet.animations).length} animasyon` +
@@ -196,6 +217,14 @@ export default class ClaudePetExtension extends Extension {
             // Dosya izleyicisi de zamanlayıcı gibi: aktörlerden önce sökülsün.
             this._tracker?.stop();
             this._tracker = null;
+
+            if (this._presence) {
+                const {fullScans, fastChecks} = this._presence.stats;
+                console.log(`${LOG} varlık yoklaması · ${fullScans} tam tarama · ` +
+                    `${fastChecks} hızlı kontrol`);
+                this._presence.stop();
+                this._presence = null;
+            }
 
             // Sürüklemenin ORTASINDA kapatılıyor olabiliriz: kilit ekranı
             // disable() çağırıyor. Bırakılmamış bir Clutter.Grab bütün girdiyi
@@ -389,6 +418,26 @@ export default class ClaudePetExtension extends Extension {
         console.log(`${LOG} boşta kalma süresi ${ms / 1000} sn`);
     }
 
+    /** Claude açıldı ya da kapandı.
+     *
+     * Pet'in var olma şartı: Claude ya masaüstü uygulaması olarak ya da
+     * terminalde çalışıyor olmalı. Kapalıyken aktörler gizleniyor,
+     * zamanlayıcılar bırakılıyor ve unredirect de geri veriliyor — yani
+     * Claude kapalıyken tam ekran oyunun bileşikleme bedeli de yok.
+     */
+    _applyPresence(varMi, ad) {
+        this._present = varMi;
+        this._director?.setAbsent(!varMi);
+
+        if (varMi)
+            this._holdUnredirect();
+        else
+            this._releaseUnredirect();
+
+        this._syncVisibility();
+        console.log(`${LOG} pet ${varMi ? `görünür (${ad})` : 'gizlendi · claude kapalı'}`);
+    }
+
     // ------------------------------------------------------------ tam ekran
 
     /** Tam ekranda pet'in GERÇEKTEN görünmesini sağlayan şey.
@@ -431,6 +480,7 @@ export default class ClaudePetExtension extends Extension {
         this._unredirectKapali = false;
         try {
             Meta.enable_unredirect_for_display(global.display);
+            console.log(`${LOG} tam ekran: unredirect geri verildi`);
         } catch (error) {
             console.warn(`${LOG} unredirect geri verilemedi: ${error}`);
         }
@@ -480,7 +530,10 @@ export default class ClaudePetExtension extends Extension {
             // soruyor), ama katman geri geldiğinde yeniden kurmak gerekmiyor.
             // `laptop-enabled` kapalıyken laptop hiç görünmüyor: aynı yol,
             // tek fark koşulun kaynağı.
-            const gorunur = !!this._boxes?.[ad] && !!kare?.[ad]?.box &&
+            // Claude kapalıysa hiçbir katman görünmüyor: pet'in var olma
+            // şartı bu (`lib/presence.js`).
+            const gorunur = this._present &&
+                !!this._boxes?.[ad] && !!kare?.[ad]?.box &&
                 (ad !== LAPTOP_KATMANI || this._laptopEnabled);
 
             if (area.visible !== gorunur) {
