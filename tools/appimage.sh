@@ -105,6 +105,14 @@ cp "$KOK/hooks/claude-pet-hook.py" "$APPDIR/hooks/"
 adim "gjs + kutuphane kapanisi"
 cp "$(readlink -f "$(command -v gjs)")" "$APPDIR/usr/bin/gjs"
 
+# GTK4 kendi simgelerinin 122'sini SVG olarak GRESOURCE ICINDE tasiyor
+# (ayarlar penceresindeki +/- dugmeleri, acilir ok, kapatma dugmesi). SVG'yi
+# cozen sey librsvg2-common'dan gelen su yukleyici; yoksa o simgeler
+# CIZILMIYOR. PNG/JPEG/GIF gdk-pixbuf'un icinde, ayri yukleyici istemiyorlar.
+SVG_YUKLEYICI="$LIBDIR/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-svg.so"
+[ -f "$SVG_YUKLEYICI" ] || {
+    echo "HATA: $SVG_YUKLEYICI yok. 'librsvg2-common' kurulu olmali."; exit 1; }
+
 TOHUM=(
     "$APPDIR/usr/bin/gjs"
     "$LIBDIR/libgtk-4.so.1"
@@ -114,7 +122,7 @@ TOHUM=(
     "$LIBDIR/libvulkan.so.1"
     "$LS_OUT/lib/libgtk4-layer-shell.so.0"
 )
-for l in "$LIBDIR"/gdk-pixbuf-2.0/2.10.0/loaders/*.so; do TOHUM+=("$l"); done
+TOHUM+=("$SVG_YUKLEYICI")
 
 # `ldd` zaten GECISLI kapanisi veriyor; tek tur yetiyor.
 {
@@ -146,15 +154,18 @@ cp "$LS_OUT/lib/girepository-1.0/Gtk4LayerShell-1.0.typelib" \
 
 # ---------------------------------------------------- 6  gdk-pixbuf yukleyicileri
 
-adim "gdk-pixbuf yukleyicileri"
+adim "gdk-pixbuf: yalnizca SVG yukleyicisi"
+# `*.so` DEGIL, TEK dosya. Makinede kurulu yukleyici kumesi (heif, webp,
+# wmf, tiff…) makineden makineye degisiyor; hepsini almak cikti'yi derleyen
+# makineye bagli yapiyordu -- OLCULDU: ayni commit yerelde 108, CI'da 98
+# kutuphane uretti. Uygulamanin ihtiyaci tek bir yukleyici.
 PB="$APPDIR/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders"
 mkdir -p "$PB"
-cp "$LIBDIR"/gdk-pixbuf-2.0/2.10.0/loaders/*.so "$PB/"
-# Onbellekteki yollar MUTLAK olamaz: AppImage her acilista baska bir yere
-# bagleniyor. Yalnizca dosya adi birakiliyor; gdk-pixbuf onlari
+cp "$SVG_YUKLEYICI" "$PB/"
+# Onbellekteki yol MUTLAK olamaz: AppImage her acilista baska bir yere
+# bagleniyor. Yalnizca dosya adi birakiliyor; gdk-pixbuf onu
 # GDK_PIXBUF_MODULEDIR'e gore cozuyor.
-GDK_PIXBUF_MODULEDIR="$LIBDIR/gdk-pixbuf-2.0/2.10.0/loaders" \
-    "$LIBDIR/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders" |
+"$LIBDIR/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders" "$SVG_YUKLEYICI" |
     sed 's|^"'"$LIBDIR"'/gdk-pixbuf-2.0/2.10.0/loaders/|"|' \
     > "$APPDIR/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
 
