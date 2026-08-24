@@ -89,13 +89,19 @@ export function hooklariKaldir() {
     return ok;
 }
 
-/** Kac hook girdisi kurulu? `status` ciktisindan okunuyor. */
+/** Kac hook girdisi kurulu? `status` ciktisindan okunuyor.
+ *
+ * Beklenen satir (hooks/claude-pet-hook.py::durum):
+ *     `  claude-pet girdileri : 7  ['Notification', …]`
+ * Sayi ELLE YAZILMIS hook'lari saymiyor; betik ikisini ayri satirlarda
+ * veriyor ve bizi yalnizca kendi girdilerimiz ilgilendiriyor.
+ */
 export function hookSayisi() {
     const [ok, cikti] = hookCalistir('status');
     if (!ok)
         return 0;
-    const m = /kurulu girdi\s*:\s*(\d+)/i.exec(cikti) ?? /(\d+)\s*girdi/i.exec(cikti);
-    return m ? Number(m[1]) : (cikti.includes('kurulu degil') ? 0 : -1);
+    const m = /claude-pet girdileri\s*:\s*(\d+)/.exec(cikti);
+    return m ? Number(m[1]) : 0;
 }
 
 // ------------------------------------------------------------- otomatik baslat
