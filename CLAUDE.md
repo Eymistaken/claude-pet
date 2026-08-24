@@ -235,23 +235,15 @@ Bir işi bitirdim demeden önce:
   typelib'in ve altı ES modülünün yüklendiğini doğruluyor — davranışı değil.
   KDE testi `README-appimage.md` sonundaki listeyle dışarıda yapılıyor.
 
-## Sürüm ve yayın
+## Sürüm çıkarmak
 
-`VERSION` dosyası tek kaynak. `.github/workflows/appimage.yml` her itmede
-derliyor ama **yalnızca `v<VERSION>` etiketi henüz yoksa** sürüm yayınlıyor.
-Yani yayın için yapılacak tek şey `VERSION`ı artırmak.
+Sürüm numarası **`VERSION` dosyasında** ve yayının tek tetiği o. CI her
+itmede derliyor; `v<VERSION>` etiketi yoksa sürüm de yayınlıyor. Yani sürüm
+çıkarmak = `VERSION`ı artırıp itmek, elle yapılacak başka bir şey yok.
 
-- `v*` bu dalın (AppImage). Eklenti `master`da `ext-v*` kullanıyor.
-- Her itmede derlemesinin sebebi: derleme bu depodaki **tek gerçek
-  entegrasyon testi**. gtk4-layer-shell kaynaktan derleniyor, `ldd` kapanışı
-  toplanıyor, 18 typelib bir araya geliyor — bunların bozulduğu ancak
-  derleyerek görülür.
-- Runner `ubuntu-24.04` **bilinçli**: AppImage'ın glibc tabanı (2.39) buradan
-  geliyor. Daha yeni bir taban README'deki uyumluluk tablosunu sessizce
-  yanlışlar.
-- CI paketi açıp **eksik kütüphane** ve **SVG yükleyicisi** arıyor. İkincisi
-  `ldd`nin yakalayamadığı bir şey (dlopen ediliyor) ve yokluğu ayarlar
-  penceresindeki simgeleri kaybettiriyor.
+`v*` bu dalın (AppImage), `ext-v*` eklentinin (`master`) — aynı numaraya
+gelseler bile çakışmasınlar diye. Gerisi (runner tabanı, pakette ne
+doğrulanıyor) `.github/workflows/appimage.yml` başlığında.
 
 ## Yol haritası
 
