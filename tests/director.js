@@ -70,7 +70,21 @@ function kur(klipler = KLIPLER) {
         d.onCycle(sonKlip);
     };
 
-    return {d, oynatilan, tur, calisiyorMu: () => calisiyor, bosalt: () => oynatilan.splice(0)};
+    return {
+        d, oynatilan, tur,
+        calisiyorMu: () => calisiyor,
+        bosalt: () => oynatilan.splice(0),
+        // Menü açılınca gerçek player donuyor (`freeze`) ve `running` false
+        // oluyor; kapanınca kaldığı kareden sürüyor. Sahte player'ın bunu
+        // taklit etmesi şart, çünkü yönetmenin "turu bekle" kuralı doğrudan
+        // `isRunning`e bakıyor.
+        dondur: () => {
+            calisiyor = false;
+        },
+        coz: () => {
+            calisiyor = COK_KARELI.has(sonKlip);
+        },
+    };
 }
 
 // ------------------------------------------------------------------- tablolar
@@ -268,6 +282,113 @@ ol('IDLE\'ın giriş/çıkış klibi yok',
         return GLib.SOURCE_REMOVE;
     });
     dongu.run();
+}
+
+// ------------------------------------------------------- duraklat (Faz 5)
+
+{
+    const {d, tur, bosalt, calisiyorMu} = kur();
+    d.start();
+    d.setState('WORKING', false);
+    tur();                          // laptop_out → typing
+    bosalt();
+
+    d.setPaused(true);
+    esit('duraklatınca nötr kareye geçiyor', bosalt(), ['idle']);
+    ol('duraklatılmışken zamanlayıcı yok', !calisiyorMu());
+
+    // Takip sürüyor: durum kaydediliyor ama hiçbir şey oynamıyor.
+    d.setState('WAITING', false);
+    d.setState('WORKING', false);
+    esit('duraklatılmışken klip oynatılmıyor', bosalt(), []);
+
+    d.setPaused(false);
+    esit('devam: nötrden güncel duruma geçiş', bosalt(), ['laptop_out']);
+    tur();
+    esit('geçiş döngü klibiyle bitiyor', bosalt(), ['typing']);
+}
+
+{
+    // Duraklatma sırasında durum değiştiyse devam edilince ORAYA gidiliyor.
+    const {d, tur, bosalt} = kur();
+    d.start();
+    d.setState('WORKING', false);
+    tur();
+    bosalt();
+
+    d.setPaused(true);
+    bosalt();
+    d.setState('WAITING', false);
+    d.setPaused(false);
+    esit('devam edilince güncel duruma geçiliyor', bosalt(), ['waiting_in']);
+    tur();
+    esit('waiting_in → waiting', bosalt(), ['waiting']);
+}
+
+{
+    // Duraklatılmışken uyku sayacı KURULMUYOR.
+    const animations = Object.fromEntries(
+        [...KLIPLER, 'sleep'].map(k => [k, {name: k}]));
+    const oynatilan = [];
+    const d = new Director({
+        animations,
+        play: ad => {
+            oynatilan.push(ad);
+            return true;
+        },
+        isRunning: () => false,
+        sleepTimeoutMs: 120,
+    });
+    d.start();
+    d.setPaused(true);
+    oynatilan.splice(0);
+
+    const dongu = new GLib.MainLoop(null, false);
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+        esit('duraklatılmışken uykuya geçmiyor', oynatilan, []);
+        d.stop();
+        dongu.quit();
+        return GLib.SOURCE_REMOVE;
+    });
+    dongu.run();
+}
+
+// ----------------------------------------------------- menü açık (Faz 5)
+
+{
+    const {d, tur, bosalt, dondur, coz} = kur();
+    d.start();
+    d.setState('WORKING', false);
+    tur();                          // typing dönüyor
+    bosalt();
+
+    d.setMenuOpen(true);
+    dondur();                       // player donduruldu
+    d.setState('IDLE', false);
+    esit('menü açıkken klip başlamıyor', bosalt(), []);
+
+    coz();                          // menü kapandı, klip kaldığı yerden
+    d.setMenuOpen(false);
+    esit('menü kapanınca yine turu bekliyor', bosalt(), []);
+    tur();
+    esit('tur bitince geçiş başlıyor', bosalt(), ['laptop_away']);
+    tur();
+    esit('laptop_away → idle', bosalt(), ['idle']);
+}
+
+{
+    // Menü tek karelik bir döngüde (idle) açıldıysa kapanınca geçiş ANINDA.
+    const {d, bosalt, dondur, coz} = kur();
+    d.start();
+    bosalt();
+
+    d.setMenuOpen(true);
+    dondur();
+    d.setState('WORKING', false);
+    esit('idle üstünde menü: yine de başlamıyor', bosalt(), []);
+    coz();
+    d.setMenuOpen(false);
+    esit('menü kapanınca anında geçiş', bosalt(), ['laptop_out']);
 }
 
 print('');

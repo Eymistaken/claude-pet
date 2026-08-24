@@ -527,4 +527,130 @@ Not / bilinen eksikler
   `sleep-timeout` hâlâ kurucu parametresi; GSettings anahtarı Faz 5.
 - `docs/PLAN.md`'ye yine dokunulmadı (kullanıcı isteği).
 
-<!-- Sıradaki: Faz 5 — prompts/faz-5-ayarlar.md -->
+## Faz 5 — Ayarlar ve kalıcılık            2026-08-24
+
+Yapılanlar
+- **Şema yedi anahtara çıktı** (`src/schemas/…claude-pet.gschema.xml`):
+  `position-x/y`, `monitor-index`, `scale` (1–8), `sleep-timeout` (0–3600),
+  `attention-notify`, `laptop-enabled`, `paused`. Var olan iki anahtarın
+  tipi değişmedi; anlamı değişti (aşağıya bak).
+- **`src/prefs.js`** (yeni) — Adw, üç grup: Görünüm (boyut, laptop),
+  Davranış (boşta kalma süresi, bildirim), Konum (monitör, konumu sıfırla).
+  Uygula düğmesi yok: her satır `settings.bind` ile bağlı, tek istisna
+  monitör listesi (ayar -1'i "birincil" diye kullanıyor, `ComboRow.selected`
+  ise 0'dan sayıyor).
+- **`src/lib/layout.js`** (yeni) — konum aritmetiğinin tamamı: monitör seçimi,
+  göreli↔global çevrim, ekran içine sıkıştırma, varsayılan yerleşim.
+  `sprite.js` gibi kabuktan bağımsız, o yüzden `tests/layout.js` gnome-shell
+  açmadan sınıyor (26 iddia).
+- **Konum artık monitöre GÖRELİ.** `position-x/y`, `monitor-index`
+  monitörünün sol üst köşesine olan uzaklık. Monitör çıkarılırsa birincile
+  düşülüyor ama **ayar yeniden yazılmıyor**, yani geri takılınca pet oraya
+  dönüyor. Kaydedilmedi işareti tek bir -1 değil **ikisinin birden** -1
+  olması: ızgara başlangıcı karakterin solunda kaldığı için göreli konum
+  meşru olarak eksi olabiliyor.
+- **Sağ tık menüsü** (`PopupMenu`): Duraklat/Devam et · Ayarlar · Konumu
+  sıfırla. Menü açıkken `player.freeze()` kareyi donduruyor (`stop()` değil:
+  menü kapanınca klip baştan değil **kaldığı kareden** sürüyor) ve yönetmen
+  yeni klip başlatmıyor.
+- **Duraklatma** (`director.setPaused`): pet nötr poza (`idle`) geçiyor,
+  hiçbir zamanlayıcı kurulmuyor, takip sürüyor. `_current` nötr sayıldığı
+  için devam edilince `sequence(IDLE → hedef)` doğru geçişi kendiliğinden
+  kuruyor — ayrı bir "devam" yolu yazmak gerekmedi.
+- **Sürükleme eşiği** (Faz 0'dan beri duran pürüz): 4 pikselin altındaki
+  hareket tıklama sayılıyor, pet kımıldamıyor ve ayarlara yazılmıyor.
+- `player.js`: `freeze()`/`thaw()` ve `_finished` bayrağı (biten bir klibi
+  çözmek ikinci bir tur bildirimi üretiyordu). `tracker.js`/`director.js`:
+  `setSleepTimeout()`.
+
+Doğrulama
+- [x] `make install && make enable` sonrası ayarlar penceresi açılıyor
+      → menüden "Ayarlar", pencere nested oturumda açıldı; üç grup da
+      göründü, logda tek bir gjs uyarısı yok.
+- [x] Boyutu değiştir → pet anında büyüyor/küçülüyor, bulanıklaşmıyor
+      → `scale 3 → 6 → 3 → 4`, her seferinde `tuval · … · hücre Npx`
+      satırı ve ekran görüntüsü. Hücre tam sayı olduğu için kenarlar
+      piksel sınırında.
+- [x] Laptobu kapat → laptop actor'ü kayboluyor ve input yutmuyor
+      → `laptop katmanı kapalı`, ekran görüntüsünde laptop yok. Actor zaten
+      `reactive: false`, ayrıca `visible: false` oluyor.
+- [x] Duraklat → animasyon duruyor, CPU sıfır; devam et → kaldığı yerden
+      → duraklatılmış **%0.06**, `typing` (hücre 4px) **%3.53**. Devam
+      edilince `IDLE → WORKING · laptop_out → typing`.
+- [x] Menü açıkken animasyon duruyor → menü açık 15 sn boyunca CPU **%0**.
+- [x] Pet'i sürükle, oturumu kapat aç → aynı yerde
+      → sürükleme `konum kaydedildi · monitör 0 · (405, 168)`, iki kez
+      `disable`/`enable`, ikisinde de `etkin · ızgara (405, 168)`.
+- [x] İkinci bir monitör bağla/çıkar → pet ekran içinde kalıyor
+      → **canlı** yapıldı (`org.gnome.Mutter.DisplayConfig.ApplyMonitorsConfig`):
+      `monitörler değişti · 1 monitör · pet monitör 0 · (608, 400)` (karakterin
+      sağ kenarı tam 800 = ekranın kenarı), geri takılınca
+      `2 monitör · pet monitör 1 · (1408, 400)`. Ayar hep `monitor-index=1`
+      kaldı.
+      Ayrıca çözünürlük düşürme: kayıt (700,400) iken 640×480 tek monitörle
+      açıldı → `ızgara (448, 344)`, elle hesaplanan değerin aynısı.
+- [x] "Konumu sıfırla" çalışıyor → hem menüden hem prefs'ten; pet bulunduğu
+      monitörün sağ altına döndü, prefs'teki alt yazı "Kayıtlı konum yok"a
+      döndü.
+- [x] Sağ tık menüsü açılıyor; menü açıkken sol tık altına GEÇMİYOR
+      → nested'de hesap makinesi açıldı: menü açıkken "7" tuşuna tıklandı,
+      ekranda hiçbir şey belirmedi (tık yalnızca menüyü kapattı); menü
+      kapalıyken aynı tık "7" yazdı. Bu GNOME'un kendi menü davranışı
+      (PopupMenu modal grab alıyor), bizim eklediğimiz bir kısıt değil.
+- [x] Ayarları birkaç kez değiştirip eklentiyi kapat aç → log temiz
+      → 15 ayar değişikliği + 2 kapat/aç turu; `kapatıldı · N kare · …`
+      satırları düzgün, claude-pet'ten tek uyarı yok, ekranda tek pet.
+- [x] `sleep-timeout` gerçekten bağlı → 5 sn'ye çekildi, `PreToolUse`
+      gönderildi, 6.5 sn sonra `WORKING → IDLE`.
+- [x] `attention-notify` → açıkken "Claude Code / Girdi bekleniyor."
+      banner'ı çıktı, kapalıyken yeni bir WAITING geçişinde çıkmadı.
+- [x] `make replay` → 21/21 + 50/50 + 26/26.
+
+Ölçüm bir hata yakaladı
+- **`g_settings_apply()` nesneyi gecikmeli moddan geri DÖNDÜRMÜYOR.** Üç
+  konum anahtarını atomik yazmak için `this._settings.delay()`/`apply()`
+  kullanmıştım. `changed` sinyali yazan process'e eşzamanlı geliyor
+  (ölçüldü: `yazmadan önce → handler(x) → x yazıldı → handler(y)`), yani
+  ayrı ayrı yazmak aradaki dinleyiciye yarım bir üçlü gösteriyor. Ama
+  `delay()` **kalıcı**: `undelay` diye bir şey yok. Sonuç canlı ölçüldü —
+  bir kez sürükledikten sonra menüden "Duraklat" dendi, pet duraklatıldı
+  ama `paused` dconf'a hiç ULAŞMADI; prefs'te de "Sıfırla"ya bastıktan
+  sonra boyut değişikliği artık yazılmıyordu. Düzeltme: toplu yazma tek
+  kullanımlık bir GSettings nesnesinden geçiyor (`_writeInts`), bağların ve
+  dinleyicilerin durduğu nesne anında yazan modda kalıyor. İki tarafta da
+  yeniden ölçüldü.
+
+Notlar / bilinen eksikler
+- **Ayarlar penceresi pet'in ÜSTÜNDE çiziliyor**, normal pencereler altında.
+  Ölçüldü (piksel sayımı): prefs açıkken pet'in dikdörtgeninde 0 turuncu
+  piksel, hesap makinesi üstündeyken 2703. Sebep `layout.js::addChrome`:
+  chrome actor'leri `global.top_window_group`'un ALTINA koyuyor ve prefs
+  penceresi oraya düşüyor. GNOME'un kendi katman kuralı, bizim hatamız
+  değil; ama ayar değiştirirken pet'i görmek isteyen pencereyi kenara
+  çekmeli.
+- **`sleep-timeout` iki yeri birden besliyor**: tracker'ın "bu kadar süredir
+  hook gelmiyor, çalışma bitmiş say" sayacı ve yönetmenin uyku klibi sayacı.
+  Tek anahtar isteniyordu ve `tracker.js` zaten bunu bekliyordu; uyku klibi
+  varlıkta olmadığı için yalnız yönetmene bağlansaydı anahtar hiçbir şey
+  yapmayan bir düğme olurdu.
+- **`scale` değişince şerit ön-hesabı YENİDEN YAPILMIYOR** — gerekmiyor.
+  Şeritler ızgara hücresi cinsinden saklanıyor, piksel çarpanı yalnızca
+  çizim anında uygulanıyor (`drawLayer(…, cell, …)`). Prompt bunu istiyordu
+  ama tasarım zaten ondan bağımsız.
+- **Ekranın kendi ölçek katsayısı (`scale_factor`) hâlâ bir kez okunuyor.**
+  `changed::scale`'de yeniden okunuyor, ama kullanıcı ekran ölçeğini
+  %100→%200 yaparsa pet bir sonraki ayar değişikliğine kadar eski hücre
+  boyutunda kalır. `St.ThemeContext` üzerinde `notify::scale-factor`
+  dinlemek tek satır; Faz 6'ya not.
+- **Duraklatma bildirimleri susturmuyor.** "Duraklat" pet'in animasyonunu
+  durduruyor; girdi bekleme bildirimi ayrı anahtarla kapatılıyor. Bilinçli:
+  pet'i susturmak isteyenin haber alma yolunu da kapatmak sürpriz olurdu.
+- **Faz 6'ya iki paket notu** (bu fazda bilerek dokunulmadı): `make pack`
+  çıktısında (a) `assets/animations.yedek*.json` de yer alıyor — depoya
+  girmiyorlar ama zip'e giriyorlar, 297 KB; (b) `schemas/` içinde yalnızca
+  `.xml` var, `gschemas.compiled` yok. Kurulum `make install` ile yapılınca
+  sorun çıkmıyor (derlenmiş şema `src/schemas/` içinden kopyalanıyor), zip'ten
+  kurulumda prefs şemayı bulamayabilir.
+- `docs/PLAN.md`'ye yine dokunulmadı (kullanıcı isteği).
+
+<!-- Sıradaki: Faz 6 — prompts/faz-6-paketleme.md -->

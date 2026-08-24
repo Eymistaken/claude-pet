@@ -3,12 +3,28 @@
   <schema id="org.gnome.shell.extensions.claude-pet"
           path="/org/gnome/shell/extensions/claude-pet/">
 
+    <!-- KONUM MODELİ (Faz 5)
+         Konum, kaydedildiği monitöre GÖRELİ saklanıyor: `position-x/y`
+         sprite ızgarasının (0,0) hücresinin, `monitor-index` monitörünün sol
+         üst köşesine olan uzaklığı. Monitör çıkarılınca ya da çözünürlük
+         değişince pet ekran dışında kalmıyor — eklenti değeri o monitörün
+         sınırlarına geri sıkıştırıyor.
+
+         Faz 2'ye kadar bu değerler GLOBAL sahne koordinatıydı. Tip aynı
+         kaldığı için eski bir değer okunduğunda hata olmuyor: birincil
+         monitöre göreli sayılıp içeri sıkıştırılıyor, yani pet en kötü
+         ihtimalle bir kez yer değiştiriyor.
+
+         Izgara başlangıcı karakterin SOLUNDA kalabildiği için bu değerler
+         eksi olabilir; o yüzden "kaydedilmedi" işareti tek bir -1 değil,
+         İKİSİNİN BİRDEN -1 olması. -->
+
     <key name="position-x" type="i">
       <default>-1</default>
       <summary>Maskotun yatay konumu</summary>
       <description>
-        Global sahne koordinatı (tüm monitörlerin ortak uzayı).
-        -1: henüz konmadı, birincil monitörün sağ altına yerleştir.
+        Izgara başlangıcının, kayıtlı monitörün sol kenarına uzaklığı (piksel).
+        position-y ile birlikte -1: henüz konmadı, sağ alta yerleştir.
       </description>
     </key>
 
@@ -16,8 +32,66 @@
       <default>-1</default>
       <summary>Maskotun dikey konumu</summary>
       <description>
-        Global sahne koordinatı (tüm monitörlerin ortak uzayı).
-        -1: henüz konmadı, birincil monitörün sağ altına yerleştir.
+        Izgara başlangıcının, kayıtlı monitörün üst kenarına uzaklığı (piksel).
+        position-x ile birlikte -1: henüz konmadı, sağ alta yerleştir.
+      </description>
+    </key>
+
+    <key name="monitor-index" type="i">
+      <default>-1</default>
+      <summary>Maskotun bulunduğu monitör</summary>
+      <description>
+        Kabuğun monitör listesindeki sıra. -1: birincil monitör. Kayıtlı
+        monitör artık bağlı değilse birincile düşülür; ayar YENİDEN YAZILMAZ,
+        böylece geçici olarak çıkarılan bir monitör tercihi silmez.
+      </description>
+    </key>
+
+    <key name="scale" type="i">
+      <default>3</default>
+      <range min="1" max="8"/>
+      <summary>Hücre boyutu</summary>
+      <description>
+        Bir sprite hücresinin piksel kenarı. Ekranın kendi ölçek katsayısıyla
+        (scale_factor) çarpılır. Tam sayı olduğu için kenarlar bulanıklaşmaz.
+      </description>
+    </key>
+
+    <key name="sleep-timeout" type="i">
+      <default>180</default>
+      <range min="0" max="3600"/>
+      <summary>Boşta kalma süresi (saniye)</summary>
+      <description>
+        İki yerde kullanılır: bu kadar süre hiç hook gelmezse pet çalışıyor
+        sayılmayı bırakır, ve boşta bu kadar beklerse uyku klibine geçer
+        (varlıkta uyku klibi varsa). 0: ikisi de kapalı.
+      </description>
+    </key>
+
+    <key name="attention-notify" type="b">
+      <default>true</default>
+      <summary>Girdi beklerken bildirim gönder</summary>
+      <description>
+        Claude Code soru sorduğunda ya da izin istediğinde masaüstü bildirimi
+        gösterilsin mi. Pet ekranın görünmeyen bir köşesindeyken işe yarar.
+      </description>
+    </key>
+
+    <key name="laptop-enabled" type="b">
+      <default>true</default>
+      <summary>Laptop katmanı çizilsin mi</summary>
+      <description>
+        Kapatıldığında laptop aktörü tamamen gizlenir. Karakter katmanı ve
+        animasyonlar değişmez.
+      </description>
+    </key>
+
+    <key name="paused" type="b">
+      <default>false</default>
+      <summary>Pet duraklatıldı mı</summary>
+      <description>
+        Duraklatıldığında pet nötr karede durur ve hiç zamanlayıcı kurulmaz.
+        Durum takibi devam eder; devam edilince pet güncel duruma geçer.
       </description>
     </key>
 

@@ -38,7 +38,8 @@ const DIKKAT_TIPLERI = new Set([
 ]);
 
 /** Hic olay gelmezse WORKING'den IDLE'a dusme suresi.
- *  Faz 5'te `sleep-timeout` ayari bunu besleyecek; simdilik parametre. */
+ *  `sleep-timeout` ayari bunu besliyor (Faz 5); buradaki deger yalnizca
+ *  ayar verilmediginde (testler) gecerli. */
 const VARSAYILAN_UYKU_MS = 5 * 60 * 1000;
 
 /** Olay dosyalarinin kok dizini. `CLAUDE_PET_STATE_DIR` ile ezilebilir --
@@ -92,6 +93,19 @@ export const Tracker = GObject.registerClass({
 
     get stats() {
         return {applied: this._applied, dropped: this._dropped};
+    }
+
+    /** Bosta kalma suresi ayari degisti (MILISANIYE). 0: hic dusme.
+     *
+     * Calisan bir sayac varsa yeni sureyle yeniden kuruluyor -- yoksa
+     * kullanici sureyi kisaltip beklemeye baslasa bile eski sayac dolana
+     * kadar hicbir sey olmazdi.
+     */
+    setSleepTimeout(ms) {
+        if (ms === this._sleepMs)
+            return;
+        this._sleepMs = ms;
+        this._armSleep();
     }
 
     /** Izlemeye basla. Basarisizsa false doner ve neden oldugunu yazar. */

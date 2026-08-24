@@ -15,6 +15,14 @@
  *    1.73 sn) ve karşılığında hareket kopuk değil akıcı görünüyor.
  *    Tek istisna rate limit: orada anilik BİLEREK var.
  *
+ * DURDURMANIN İKİ TÜRÜ VAR (Faz 5) ve ikisi de yeni klip başlatmıyor:
+ *   duraklatma — kullanıcı istedi. Pet NÖTR poza geçiyor (`idle`), çünkü
+ *     "duraklattım" demek "kutuya girmiş bir maskot" değil, dinlenen bir
+ *     maskot demek. Takip sürüyor: hedef durum kaydediliyor, devam edilince
+ *     pet oraya geçiş yaparak dönüyor.
+ *   menü açık — geçici. Kare OLDUĞU GİBİ donuyor (`player.freeze()`), menü
+ *     kapanınca kaldığı kareden sürüyor.
+ *
  * `St`, `Main`, `global` geçmiyor — klip oynatma çağıranın verdiği geri
  * çağrıdan geçiyor, çünkü actor'leri kliplerin sınırlayıcı kutularına göre
  * boyutlandırmak `extension.js`'in işi (Faz 2).
@@ -29,7 +37,8 @@ const LOG = '[claude-pet]';
 /** Boşta uyku klibi. Varlıkta yoksa uyku hiç kurulmuyor. */
 const UYKU_KLIBI = 'sleep';
 
-/** Boşta kalınca uykuya geçme süresi. Faz 5'te ayar anahtarı olacak. */
+/** Boşta kalınca uykuya geçme süresi. `sleep-timeout` ayarı bunu besliyor;
+ *  buradaki değer yalnızca ayar verilmediğinde (testler) geçerli. */
 const VARSAYILAN_UYKU_MS = 3 * 60 * 1000;
 
 export class Director {
@@ -55,10 +64,23 @@ export class Director {
         this._queue = [];
 
         this._sleepId = 0;
+
+        // İki ayrı sebeple durmuş olabiliriz; ikisi de yeni klip başlatmıyor.
+        this._paused = false;
+        this._menuOpen = false;
     }
 
     get state() {
         return this._current;
+    }
+
+    get paused() {
+        return this._paused;
+    }
+
+    /** Yeni klip başlatmanın yasak olduğu her durum. */
+    get _held() {
+        return this._paused || this._menuOpen;
     }
 
     /** Açılış pozu. */
@@ -75,6 +97,13 @@ export class Director {
     /** `tracker.changed` buraya bağlanıyor. */
     setState(state, rateLimited) {
         this._disarmSleep();
+
+        // TUTULMUŞKEN de takip sürüyor: ne olduğu kaydediliyor, oynatılmıyor.
+        // Devam edilince `_sync()` aradaki farkı kapatıyor.
+        if (this._held) {
+            this._target = state;
+            return;
+        }
 
         // RATE LIMIT — kural 5. Geçiş klibi YOK: `laptop_away` oynatılmıyor,
         // doğrudan `idle`'a geçiliyor. Laptop actor'ünü ayrıca gizlemeye
@@ -104,6 +133,11 @@ export class Director {
 
     /** Player bir klibin turunu bitirdiğinde çağrılıyor. */
     onCycle(_name) {
+        // Duraklatma/menü tam da tur biterken gelmiş olabilir: donmuş bir
+        // player artık tur bildirmez ama yoldaki bildirim yeni klip başlatmasın.
+        if (this._held)
+            return;
+
         // Dizi çalarken hedef değiştiyse kalanını bırak, yeniden planla.
         if (this._target !== this._current) {
             this._begin();
@@ -112,9 +146,63 @@ export class Director {
         this._next();
     }
 
+    // ------------------------------------------------------- duraklat / menü
+
+    /** Kullanıcı duraklattı ya da devam etti (`paused` ayarı).
+     *
+     * Duraklatınca `_current` NÖTR sayılıyor (`IDLE`), çünkü ekranda gerçekten
+     * o poz var. Mantıksal durum `_target`ta duruyor, yani devam edilince
+     * `sequence(IDLE → hedef)` kendiliğinden doğru geçişi kuruyor — ayrı bir
+     * "devam" yolu yazmaya gerek kalmıyor.
+     */
+    setPaused(paused) {
+        paused = !!paused;
+        if (paused === this._paused)
+            return;
+        this._paused = paused;
+
+        if (paused) {
+            this._disarmSleep();
+            this._queue = [];
+            this._current = 'IDLE';
+            this._playClip(STATE_ANIM.IDLE, true);
+            console.log(`${LOG} yönetmen: duraklatıldı · nötr kare`);
+            return;
+        }
+
+        console.log(`${LOG} yönetmen: devam · hedef ${this._target}`);
+        this._sync();
+    }
+
+    /** Sağ tık menüsü açıldı/kapandı. Kareyi donduran taraf çağıran
+     *  (`player.freeze()`); burada yalnızca yeni klip başlatılmıyor. */
+    setMenuOpen(open) {
+        open = !!open;
+        if (open === this._menuOpen)
+            return;
+        this._menuOpen = open;
+
+        if (open) {
+            this._disarmSleep();
+            return;
+        }
+        this._sync();
+    }
+
+    /** Uyku süresi ayarı değişti (saniye değil MİLİSANİYE). */
+    setSleepTimeout(ms) {
+        if (ms === this._sleepMs)
+            return;
+        this._sleepMs = ms;
+        this._armSleep();
+    }
+
     // -------------------------------------------------------------------- iç
 
     _sync() {
+        if (this._held)
+            return;
+
         if (this._target === this._current && this._queue.length === 0) {
             this._armSleep();
             return;
@@ -168,6 +256,8 @@ export class Director {
     _armSleep() {
         this._disarmSleep();
 
+        if (this._held)
+            return;
         if (this._current !== 'IDLE' || this._sleepMs <= 0)
             return;
         if (!this._animations[UYKU_KLIBI])

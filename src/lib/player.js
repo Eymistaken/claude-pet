@@ -14,6 +14,11 @@
  * TUR BİLDİRİMİ (Faz 4): bir klip tam bir turu bitirdiğinde `onCycle`
  * çağrılıyor. Yönetmen animasyonu ortasından kesmemek için buna bakıyor —
  * durum değişse bile çalan klip turunu tamamlıyor.
+ *
+ * DONDURMA (Faz 5): sağ tık menüsü açıkken animasyon duruyor. `stop()`'tan
+ * farkı, `thaw()`'un KALDIĞI KAREDEN sürdürmesi — menü kapanınca klip baştan
+ * başlamıyor. Biten (döngüsüz, son karesi dolmuş) bir klip `_finished` ile
+ * işaretleniyor, yoksa `thaw()` ikinci bir tur bildirimi üretirdi.
  */
 
 import GLib from 'gi://GLib';
@@ -35,6 +40,9 @@ export class Player {
         this._index = 0;
         this._loop = false;
         this._timeoutId = 0;
+        // Döngüsüz bir klip son karesini de gösterip bitti mi? `thaw()` buna
+        // bakıyor: biten klibi yeniden zamanlamak ikinci bir `onCycle` demek.
+        this._finished = false;
     }
 
     /** Oynat. `loop` verilmezse animasyonun kendi bayrağı geçerli. */
@@ -54,6 +62,7 @@ export class Player {
         this._anim = anim;
         this._loop = options.loop ?? anim.loop;
         this._index = 0;
+        this._finished = false;
 
         this._onFrame();
         this._schedule();
@@ -63,6 +72,21 @@ export class Player {
     /** Zamanlayıcıyı durdurur. Görünen kare olduğu yerde kalır. */
     stop() {
         this._stopTimer();
+    }
+
+    /** Zamanlayıcıyı durdur, kareyi dondur. `thaw()` kaldığı yerden sürdürür.
+     *
+     * Menü açıkken kullanılıyor (Faz 5). `stop()` ile aynı işi yapıyor ama
+     * niyeti farklı: `stop()` kapanış, bu geçici bir duraklama.
+     */
+    freeze() {
+        this._stopTimer();
+    }
+
+    /** Donmuş klibi kaldığı KAREDEN sürdür. Biten klip yeniden başlamaz. */
+    thaw() {
+        if (this._anim && !this._finished && !this._timeoutId)
+            this._schedule();
     }
 
     /** O an çizilecek derlenmiş kare, ya da null. */
@@ -120,6 +144,8 @@ export class Player {
                     this._index = 0;
                     this._onFrame();
                     this._schedule();
+                } else {
+                    this._finished = true;
                 }
                 // Sıradaki klibe geçiş kararı yönetmenin; burada yalnızca
                 // haber veriliyor. Döngüde de haber gidiyor, çünkü "turu

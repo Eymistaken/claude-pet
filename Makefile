@@ -10,7 +10,7 @@ BUILD   := build
 EXT_DIR := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
 .PHONY: help schemas install uninstall enable disable \
-        nested nested-kill nested-clean nested-log preview logs pack \
+        nested nested-kill nested-clean nested-log preview logs pack prefs \
         hooks unhooks hooks-status replay replay-canli
 
 help:
@@ -20,13 +20,14 @@ help:
 	@echo "  make uninstall     kurulu eklentiyi sil"
 	@echo "  make enable        GERCEK oturumda etkinlestir"
 	@echo "  make disable       GERCEK oturumda devre disi birak"
+	@echo "  make prefs         ayarlar penceresini ac"
 	@echo
 	@echo "  make nested        izole bir test oturumu baslat (gercek oturuma dokunmaz)"
 	@echo "  make nested-log    test oturumunun logunu izle"
 	@echo "  make nested-kill   test oturumunu ve yetim servisleri kapat"
 	@echo "  make nested-clean  yalnizca yetim servisleri topla"
 	@echo "  make preview       kareleri bagimsiz pencerede ciz (kabuga dokunmaz)"
-	@echo "  make replay        hook -> durum -> klip zincirini izole olarak sina"
+	@echo "  make replay        hook/durum/klip/konum mantigini izole olarak sina"
 	@echo "  make replay-canli  CANLI pet'i senaryoyla sur (tur|izin|ratelimit)"
 	@echo
 	@echo "  make hooks         Claude Code hook'larini ~/.claude/settings.json'a ekle"
@@ -65,6 +66,11 @@ enable:
 disable:
 	gnome-extensions disable $(UUID)
 
+# Nested oturumda calistirmak icin komutu o oturumun DISPLAY/DBUS'i ile
+# vermek gerekir; `tools/nested.sh` ortami yaziyor.
+prefs:
+	gnome-extensions prefs $(UUID)
+
 # ------------------------------------------------------------ gelistirme dongusu
 
 nested:
@@ -93,6 +99,8 @@ replay:
 	gjs -m tests/replay.js
 	@echo
 	gjs -m tests/director.js
+	@echo
+	gjs -m tests/layout.js
 
 # ------------------------------------------------------------------ hook'lar
 #

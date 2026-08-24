@@ -12,7 +12,15 @@
  * Konumun tek kaynağı `_originX/_originY`: sprite ızgarasının (0,0) hücresinin
  * sahnedeki yeri. İki actor de kendi kutusunun ofsetiyle oradan türetiliyor,
  * yani birlikte hareket etmeleri için ayrıca bir şey yapmaya gerek yok.
- * GSettings'e yazılan da bu — Faz 1'in kaydettiği değerlerle aynı anlamda.
+ *
+ * AYARLAR (Faz 5). Yedi anahtarın hepsi CANLI uygulanıyor; hiçbiri için
+ * eklentiyi kapatıp açmak gerekmiyor. Konum artık monitöre GÖRELİ saklanıyor
+ * ve aritmetiği `lib/layout.js`'te — kabuktan bağımsız, yani sınanabilir.
+ *
+ * SIZINTI. Kurulan her `connect()` `_connect()` üzerinden geçiyor ve
+ * `disable()` hepsini kesiyor. Ayar dinleyicileri sızıntının en sık kaynağı:
+ * kilit ekranı `disable()`/`enable()` çağırıyor, kesilmeyen bir dinleyici
+ * orada hayalet actor olarak birikiyor.
  *
  * Bu kod gnome-shell process'inin İÇİNDE çalışıyor: yakalanmamış bir exception
  * kullanıcının bütün masaüstünü düşürür. enable() gövdesi bu yüzden try/catch
@@ -25,23 +33,33 @@ import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {loadAnimations} from './lib/animations.js';
 import {drawLayer} from './lib/sprite.js';
 import {Player} from './lib/player.js';
 import {Tracker} from './lib/tracker.js';
 import {Director} from './lib/director.js';
+import * as Layout from './lib/layout.js';
 
 const LOG = '[claude-pet]';
-
-/** Bir hücrenin ölçeklenmemiş piksel kenarı. */
-const BASE_CELL = 3;
 
 /** İlk yerleşimde monitör kenarına bırakılan boşluk. */
 const MARGIN = 24;
 
 /** Tıklamayı alan katman. Sürükleme ve konum hesapları buna bakıyor. */
 const ANA_KATMAN = 'karakter';
+
+/** `laptop-enabled` ayarının kapattığı katman. */
+const LAPTOP_KATMANI = 'laptop';
+
+/** Sürükleme sayılmaya başlanan mesafe (piksel).
+ *
+ * Altında kalan hareket TIKLAMA sayılıyor: pet yerinden oynamıyor ve ayarlara
+ * yazılmıyor. Eşik olmadan tek bir tıklama bile "sürükleme bitti" sayılıp
+ * konumu yeniden yazıyordu (Faz 0'dan beri duran pürüz).
+ */
+const SURUKLEME_ESIGI = 4;
 
 /* Katman → actor ayarları. Nesnedeki SIRA sahnedeki yığın sırası: laptop
  * önce ekleniyor, yani karakterin altında kalıyor. (İçerik olarak
@@ -70,16 +88,25 @@ export default class ClaudePetExtension extends Extension {
         this._grab = null;
         this._grabOffsetX = 0;
         this._grabOffsetY = 0;
+        this._pressX = 0;
+        this._pressY = 0;
+        this._dragMoved = false;
         this._player = null;
         this._sheet = null;
-        this._cell = BASE_CELL;
+        this._cell = 3;
         this._boxes = null;
         this._originX = 0;
         this._originY = 0;
-        // Fazın merkezî iddiası ölçülebilir kalsın: kare sayısı yüzlerceyken
-        // boyutlandırma sayısı animasyon değişimi kadar olmalı.
         this._tracker = null;
         this._director = null;
+        this._menu = null;
+        this._menuManager = null;
+        this._pauseItem = null;
+        this._laptopEnabled = true;
+        this._paused = false;
+        this._monitorIndex = -1;
+        // Fazın merkezî iddiası ölçülebilir kalsın: kare sayısı yüzlerceyken
+        // boyutlandırma sayısı animasyon değişimi kadar olmalı.
         this._frameCount = 0;
         this._resizeCount = 0;
         // Katman gizlenip gösterilmesi dışarıdan görünmüyor (Wayland'de input
@@ -92,9 +119,9 @@ export default class ClaudePetExtension extends Extension {
             this._sheet = loadAnimations(
                 GLib.build_filenamev([this.path, 'assets', 'animations.json']));
 
-            // Ölçek bir kez okunuyor. Ölçek değişikliğini izlemek Faz 5'in işi.
-            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-            this._cell = Math.max(1, Math.round(BASE_CELL * scale));
+            this._laptopEnabled = this._settings.get_boolean('laptop-enabled');
+            this._paused = this._settings.get_boolean('paused');
+            this._cell = this._readCell();
 
             this._buildActors();
 
@@ -110,23 +137,40 @@ export default class ClaudePetExtension extends Extension {
                 // o yüzden yönetmen player'a doğrudan değil buradan geçiyor.
                 play: (ad, secenekler) => this._playAnimation(ad, secenekler),
                 isRunning: () => this._player?.running ?? false,
+                sleepTimeoutMs: this._readSleepMs(),
             });
+            // Duraklatılmış açılışta bile açılış pozu çiziliyor; `start()`
+            // yalnızca uykuyu kurmuyor.
+            if (this._paused)
+                this._director.setPaused(true);
             this._director.start();
 
             // Konum animasyondan SONRA: varsayılan yerleşim karakter kutusunun
             // boyutunu biliyor olmalı.
             this._restorePosition();
             this._makeDraggable();
+            this._buildMenu();
 
-            this._tracker = new Tracker();
+            this._tracker = new Tracker({sleepTimeoutMs: this._readSleepMs()});
             this._connect(this._tracker, 'changed', (_t, durum, rateLimited) => {
                 console.log(`${LOG} durum: ${durum}${rateLimited ? ' · rate limit' : ''}`);
                 this._director?.setState(durum, rateLimited);
+                if (durum === 'WAITING')
+                    this._notifyAttention();
             });
             this._tracker.start();
 
+            this._watchSettings();
+
+            // Monitör takılıp çıkarıldığında ya da çözünürlük değiştiğinde
+            // pet ekran dışında kalmasın.
+            this._connect(Main.layoutManager, 'monitors-changed',
+                () => this._onMonitorsChanged());
+
             console.log(`${LOG} etkin · ızgara (${this._originX}, ${this._originY}) · ` +
-                `hücre ${this._cell}px · ${Object.keys(this._sheet.animations).length} animasyon`);
+                `monitör ${this._monitorIndex} · hücre ${this._cell}px · ` +
+                `${Object.keys(this._sheet.animations).length} animasyon` +
+                `${this._paused ? ' · DURAKLATILMIŞ' : ''}`);
         } catch (error) {
             console.error(`${LOG} enable: ${error}`);
             // Yarım kurulmuş bir eklenti bırakma: ne kurulduysa geri al.
@@ -154,10 +198,20 @@ export default class ClaudePetExtension extends Extension {
             this._endDrag(false);
 
             // Sinyaller aktörlerden ÖNCE koparılıyor: destroy() sırasında
-            // tetiklenen bir geri çağrı yok olmuş alanlara uzanmasın.
+            // tetiklenen bir geri çağrı yok olmuş alanlara uzanmasın. Ayar
+            // dinleyicileri de bu listede.
             for (const [object, id] of this._signals ?? [])
                 object.disconnect(id);
             this._signals = [];
+
+            // Menü kaynak aktörden önce gitsin: kapanırken ona uzanıyor.
+            if (this._menu) {
+                this._menuManager?.removeMenu(this._menu);
+                this._menu.destroy();
+            }
+            this._menu = null;
+            this._menuManager = null;
+            this._pauseItem = null;
 
             for (const area of Object.values(this._actors ?? {})) {
                 Main.layoutManager.removeChrome(area);
@@ -211,6 +265,110 @@ export default class ClaudePetExtension extends Extension {
         this._signals.push([object, id]);
     }
 
+    // ------------------------------------------------------------------ ayarlar
+
+    /** Hücrenin piksel kenarı: ayar × ekranın kendi ölçeği.
+     *  Tam sayı olduğu için dikdörtgenler piksel sınırına oturuyor —
+     *  büyütmek bulanıklaştırmıyor. */
+    _readCell() {
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        return Math.max(1, Math.round(this._settings.get_int('scale') * scale));
+    }
+
+    /** `sleep-timeout` saniye cinsinden; iki tüketicisi de milisaniye istiyor. */
+    _readSleepMs() {
+        return Math.max(0, this._settings.get_int('sleep-timeout')) * 1000;
+    }
+
+    /** Birkaç anahtarı TEK yazma olarak gönder.
+     *
+     * ÖLÇÜLDÜ: `changed` sinyali yazan process'e EŞZAMANLI geliyor —
+     * `set_int` daha dönmeden dinleyici çalışıyor
+     * (`yazmadan önce → handler(x) → x yazıldı → handler(y) → y yazıldı`).
+     * Üç anahtarı ayrı ayrı yazmak, aradaki dinleyicinin YARIM bir üçlü
+     * görmesi demek — yeni monitör + eski koordinat — ve pet bir kare
+     * boyunca yanlış yere sıçrar.
+     *
+     * `delay()`/`apply()` bunu çözüyor ama nesneyi KALICI olarak gecikmeli
+     * moda sokuyor: `g_settings_apply()` geri döndürmüyor ve `undelay` diye
+     * bir şey yok. ÖLÇÜLDÜ (bu faz sırasında, canlı): `this._settings`
+     * üzerinde bir kez `delay()` çağrıldıktan sonra `paused` ayarı bir daha
+     * dconf'a ULAŞMADI. O yüzden toplu yazma tek kullanımlık bir nesneden
+     * geçiyor; `this._settings` anında yazan modda kalıyor.
+     */
+    _writeInts(degerler) {
+        const settings = this.getSettings();
+        settings.delay();
+        for (const [anahtar, deger] of Object.entries(degerler))
+            settings.set_int(anahtar, deger);
+        settings.apply();
+    }
+
+    _watchSettings() {
+        const izle = (anahtar, fn) =>
+            this._connect(this._settings, `changed::${anahtar}`, fn);
+
+        izle('scale', () => this._applyScale());
+        izle('laptop-enabled', () => this._applyLaptop());
+        izle('paused', () => this._applyPaused());
+        izle('sleep-timeout', () => this._applySleep());
+
+        // Konum anahtarları prefs'ten de değişebiliyor ("konumu sıfırla",
+        // monitör seçimi). `_restorePosition()` idempotent — kendi
+        // yazdığımız değer geri okunduğunda pet yerinden oynamıyor.
+        for (const anahtar of ['position-x', 'position-y', 'monitor-index'])
+            izle(anahtar, () => this._restorePosition());
+    }
+
+    /** Ölçek değişti: tuvalleri yeniden boyutla, konumu yeni boyuta göre çöz. */
+    _applyScale() {
+        const cell = this._readCell();
+        if (cell === this._cell)
+            return;
+
+        this._cell = cell;
+        this._syncSize(this._player?.currentName ?? 'ölçek');
+        // Büyüyen karakter ekran dışına taşabilir; kayıtlı konum yeni boyuta
+        // göre yeniden sıkıştırılıyor.
+        this._restorePosition();
+        this._syncVisibility();
+        for (const area of Object.values(this._actors))
+            area.queue_repaint();
+    }
+
+    _applyLaptop() {
+        this._laptopEnabled = this._settings.get_boolean('laptop-enabled');
+        this._syncVisibility();
+        console.log(`${LOG} laptop katmanı ${this._laptopEnabled ? 'açık' : 'kapalı'}`);
+    }
+
+    _applyPaused() {
+        this._paused = this._settings.get_boolean('paused');
+        this._director?.setPaused(this._paused);
+    }
+
+    /** Tek anahtar iki yeri besliyor: pet'in "çalışıyor" saymayı bıraktığı süre
+     *  (tracker) ve boşta uyku klibine geçme süresi (yönetmen). İkisi de
+     *  "bu kadar süredir bir şey olmuyor" sorusunun cevabı. */
+    _applySleep() {
+        const ms = this._readSleepMs();
+        this._director?.setSleepTimeout(ms);
+        this._tracker?.setSleepTimeout(ms);
+        console.log(`${LOG} boşta kalma süresi ${ms / 1000} sn`);
+    }
+
+    /** Claude Code girdi bekliyor: pet görünmüyor olabilir, bildirim gönder. */
+    _notifyAttention() {
+        if (!this._settings?.get_boolean('attention-notify'))
+            return;
+
+        try {
+            Main.notify('Claude Code', 'Girdi bekleniyor.');
+        } catch (error) {
+            console.warn(`${LOG} bildirim gönderilemedi: ${error}`);
+        }
+    }
+
     // ------------------------------------------------------------------ çizim
 
     _onRepaint(ad, area) {
@@ -229,14 +387,23 @@ export default class ClaudePetExtension extends Extension {
     /** Kare değişti: görünürlüğü tazele ve yeniden çizdir. BOYUT DEĞİŞMEZ. */
     _onFrame() {
         this._frameCount++;
+        this._syncVisibility();
+    }
 
+    /** Hangi katman görünecek: bu karede içeriği var mı, ve ayar açık mı. */
+    _syncVisibility() {
         const kare = this._player?.currentFrame();
+
         for (const [ad, area] of Object.entries(this._actors)) {
             // Katman bu karede boşsa actor GİZLENİR, yok edilmez: gizli bir
             // actor ne çiziliyor ne de picking'e giriyor (X11'de input
             // bölgesine de girmiyor — layout.js orada `get_paint_visibility()`
             // soruyor), ama katman geri geldiğinde yeniden kurmak gerekmiyor.
-            const gorunur = !!this._boxes?.[ad] && !!kare?.[ad]?.box;
+            // `laptop-enabled` kapalıyken laptop hiç görünmüyor: aynı yol,
+            // tek fark koşulun kaynağı.
+            const gorunur = !!this._boxes?.[ad] && !!kare?.[ad]?.box &&
+                (ad !== LAPTOP_KATMANI || this._laptopEnabled);
+
             if (area.visible !== gorunur) {
                 area.visible = gorunur;
                 this._visibilityChanges++;
@@ -285,6 +452,9 @@ export default class ClaudePetExtension extends Extension {
      * Bedeli: birleşim kutusu sıkı kutudan büyük (karakterde 1.46–1.62×).
      * Kabul edilebilir, çünkü kazanç zaten laptobu ve tuvalin boş kenarlarını
      * dışarıda bırakmaktan geliyor — karakter actor'ü tam tuvalin %33–55'i.
+     *
+     * Ölçek ayarı da buradan geçiyor: hücre büyüyünce kutular aynı kalıyor,
+     * piksel karşılığı değişiyor.
      */
     _syncSize(klip) {
         const rapor = [];
@@ -299,7 +469,8 @@ export default class ClaudePetExtension extends Extension {
         }
 
         this._resizeCount++;
-        console.log(`${LOG} tuval · ${klip} · ${rapor.join(' · ')}`);
+        console.log(`${LOG} tuval · ${klip} · hücre ${this._cell}px · ` +
+            rapor.join(' · '));
     }
 
     /** Actor konumlarını ızgara başlangıcından türet. */
@@ -321,66 +492,52 @@ export default class ClaudePetExtension extends Extension {
     }
 
     // ------------------------------------------------------------------ konum
+    //
+    // Aritmetiğin tamamı `lib/layout.js`'te ve kabuktan bağımsız; buradaki iş
+    // yalnızca kabuktan monitör listesini alıp sonucu aktörlere uygulamak.
 
-    /** Kayıtlı konuma yerleştir; kayıt yoksa birincil monitörün sağ altına. */
-    _restorePosition() {
-        let x = this._settings.get_int('position-x');
-        let y = this._settings.get_int('position-y');
-
-        if (x < 0 || y < 0) {
-            const monitor = Main.layoutManager.primaryMonitor;
-            const box = this._boxes?.[ANA_KATMAN];
-            if (monitor && box) {
-                // Kenar boşluğu KARAKTERE göre ölçülüyor, tuvale göre değil:
-                // artık actor'ün kenarıyla karakterin kenarı aynı şey.
-                x = monitor.x + monitor.width - MARGIN - (box.x + box.w) * this._cell;
-                y = monitor.y + monitor.height - MARGIN - (box.y + box.h) * this._cell;
-            } else {
-                // Monitör tablosu henüz hazır değilse ekranın dışına düşmektense
-                // sol üste yakın dur; ilk sürüklemede zaten düzelir.
-                x = MARGIN;
-                y = MARGIN;
-            }
-        }
-
-        const [cx, cy] = this._clamp(x, y);
-        this._setOrigin(cx, cy);
+    _monitors() {
+        return Main.layoutManager.monitors ?? [];
     }
 
-    /** Izgara başlangıcını, KARAKTER bir monitörün içinde kalacak şekilde
-     *  sıkıştır.
+    _primaryIndex() {
+        return Main.layoutManager.primaryIndex ?? 0;
+    }
+
+    /** Ayarlardaki kaydı ekrandaki bir yere çevir ve uygula.
      *
-     * Hangi monitör: karakterin MERKEZİNİ içeren monitör. Hiçbiri içermiyorsa
-     * (monitör çıkarılmış, kayıtlı konum artık boşlukta kalmış) birincile
-     * düşülür — yoksa pet erişilemez bir yerde belirir.
-     *
-     * Laptop bilerek sıkıştırılmıyor: karakterin solunda duruyor, ekran
-     * kenarında yarısı dışarı taşabilir. Onu içeride tutmak karakteri
-     * kenardan uzaklaştırırdı.
+     * Açılış, ölçek değişimi, monitör değişimi ve prefs'ten gelen her konum
+     * değişikliği buradan geçiyor. İdempotent: aynı ayarlarla ikinci kez
+     * çağrılmak pet'i oynatmıyor.
      */
-    _clamp(originX, originY) {
-        const box = this._boxes?.[ANA_KATMAN];
-        const monitors = Main.layoutManager.monitors;
-        if (!box || !monitors?.length)
-            return [Math.round(originX), Math.round(originY)];
+    _restorePosition() {
+        const cozum = Layout.resolveOrigin({
+            monitors: this._monitors(),
+            primaryIndex: this._primaryIndex(),
+            box: this._boxes?.[ANA_KATMAN],
+            cell: this._cell,
+            saved: {
+                x: this._settings.get_int('position-x'),
+                y: this._settings.get_int('position-y'),
+                monitorIndex: this._settings.get_int('monitor-index'),
+            },
+            margin: MARGIN,
+        });
 
-        const w = box.w * this._cell;
-        const h = box.h * this._cell;
-        const x = originX + box.x * this._cell;
-        const y = originY + box.y * this._cell;
+        this._monitorIndex = cozum.monitorIndex;
+        this._setOrigin(cozum.x, cozum.y);
+    }
 
-        const monitor = monitors.find(m =>
-            x + w / 2 >= m.x && x + w / 2 < m.x + m.width &&
-            y + h / 2 >= m.y && y + h / 2 < m.y + m.height)
-            ?? Main.layoutManager.primaryMonitor ?? monitors[0];
-
-        const cx = Math.max(monitor.x, Math.min(x, monitor.x + monitor.width - w));
-        const cy = Math.max(monitor.y, Math.min(y, monitor.y + monitor.height - h));
-
-        return [
-            Math.round(cx - box.x * this._cell),
-            Math.round(cy - box.y * this._cell),
-        ];
+    /** Monitör takıldı/çıkarıldı ya da çözünürlük değişti.
+     *
+     * Ayar YENİDEN YAZILMIYOR: kayıtlı monitör geçici olarak çıkarılmışsa
+     * tercih korunuyor, geri takılınca pet oraya dönüyor. Ekranda görünen
+     * konum ise her hâlükârda içeri sıkıştırılıyor.
+     */
+    _onMonitorsChanged() {
+        this._restorePosition();
+        console.log(`${LOG} monitörler değişti · ${this._monitors().length} monitör · ` +
+            `pet monitör ${this._monitorIndex} · (${this._originX}, ${this._originY})`);
     }
 
     // -------------------------------------------------------------- sürükleme
@@ -405,6 +562,11 @@ export default class ClaudePetExtension extends Extension {
     }
 
     _onPress(event) {
+        if (event.get_button() === Clutter.BUTTON_SECONDARY) {
+            this._menu?.toggle();
+            return Clutter.EVENT_STOP;
+        }
+
         if (event.get_button() !== Clutter.BUTTON_PRIMARY)
             return Clutter.EVENT_PROPAGATE;
 
@@ -414,6 +576,9 @@ export default class ClaudePetExtension extends Extension {
         // pet ilk harekette imlecin altına zıplar.
         this._grabOffsetX = stageX - this._originX;
         this._grabOffsetY = stageY - this._originY;
+        this._pressX = stageX;
+        this._pressY = stageY;
+        this._dragMoved = false;
 
         // Grab olmadan imleç aktörün dışına çıktığı anda motion olayları kesilir
         // ve sürükleme yarıda kalır.
@@ -427,6 +592,16 @@ export default class ClaudePetExtension extends Extension {
             return Clutter.EVENT_PROPAGATE;
 
         const [stageX, stageY] = event.get_coords();
+
+        // Eşiği aşana kadar pet KIMILDAMIYOR. Aşınca da hareket imlecin
+        // basıldığı andaki ofsetinden hesaplanıyor, yani pet zıplamıyor.
+        if (!this._dragMoved) {
+            if (Math.abs(stageX - this._pressX) < SURUKLEME_ESIGI &&
+                Math.abs(stageY - this._pressY) < SURUKLEME_ESIGI)
+                return Clutter.EVENT_STOP;
+            this._dragMoved = true;
+        }
+
         this._setOrigin(stageX - this._grabOffsetX, stageY - this._grabOffsetY);
 
         return Clutter.EVENT_STOP;
@@ -440,7 +615,7 @@ export default class ClaudePetExtension extends Extension {
         return Clutter.EVENT_STOP;
     }
 
-    /** Grab'i bırak; `save` ise son konumu sıkıştırıp GSettings'e yaz.
+    /** Grab'i bırak; gerçekten sürüklendiyse konumu kaydet.
      *
      * disable() de buraya uğruyor ama `save: false` ile: kapanış sırasında
      * ayarlara yazmak, yarım kalmış bir sürüklemeyi kalıcılaştırmak olurdu.
@@ -452,19 +627,105 @@ export default class ClaudePetExtension extends Extension {
         this._grab.dismiss();
         this._grab = null;
 
-        if (!save)
+        const tasindi = this._dragMoved;
+        this._dragMoved = false;
+        if (!save || !tasindi)
             return;
 
         try {
-            const [x, y] = this._clamp(this._originX, this._originY);
-            this._setOrigin(x, y);
-
-            this._settings.set_int('position-x', x);
-            this._settings.set_int('position-y', y);
-
-            console.log(`${LOG} konum kaydedildi (${x}, ${y})`);
+            this._savePosition();
         } catch (error) {
             console.error(`${LOG} sürükleme sonu: ${error}`);
         }
+    }
+
+    /** Bulunduğu yeri, altındaki monitöre GÖRELİ olarak yaz.
+     *
+     * Üç anahtar TEK yazmada gidiyor (`_writeInts`): aralarında bir `changed`
+     * sinyali doğarsa `_restorePosition()` yeni konumu ESKİ monitöre göre
+     * çözer ve pet bir kare için yanlış yere sıçrar.
+     */
+    _savePosition() {
+        const monitors = this._monitors();
+        const box = this._boxes?.[ANA_KATMAN];
+        const primary = this._primaryIndex();
+
+        const index = Layout.monitorIndexForOrigin(monitors, box, this._cell,
+            this._originX, this._originY, primary);
+        const {monitor} = Layout.pickMonitor(monitors, index, primary);
+
+        const [gx, gy] = Layout.clampOrigin(monitor, box, this._cell,
+            this._originX, this._originY);
+        const [rx, ry] = Layout.kacinKayitsiz(
+            ...Layout.toRelative(monitor, gx, gy));
+
+        // Ekrandaki konum da kaydedilen değerden türetiliyor: ayar ile görüntü
+        // arasında bir piksel bile fark kalmasın.
+        this._setOrigin(...Layout.fromRelative(monitor, rx, ry));
+        this._monitorIndex = index;
+
+        this._writeInts({
+            'monitor-index': index,
+            'position-x': rx,
+            'position-y': ry,
+        });
+
+        console.log(`${LOG} konum kaydedildi · monitör ${index} · (${rx}, ${ry})`);
+    }
+
+    // ------------------------------------------------------------------- menü
+
+    _buildMenu() {
+        const pet = this._actors[ANA_KATMAN];
+        if (!pet)
+            return;
+
+        // Arrow side BOTTOM: menü aktörün ÜSTÜNDE açılıyor. Pet çoğunlukla
+        // ekranın alt kenarında duruyor; yer yoksa BoxPointer kendi çeviriyor.
+        this._menu = new PopupMenu.PopupMenu(pet, 0.5, St.Side.BOTTOM);
+        Main.layoutManager.uiGroup.add_child(this._menu.actor);
+        this._menu.actor.hide();
+
+        this._menuManager = new PopupMenu.PopupMenuManager(pet);
+        this._menuManager.addMenu(this._menu);
+
+        this._pauseItem = this._menu.addAction('Duraklat', () => this._togglePause());
+        this._menu.addAction('Ayarlar', () => this.openPreferences());
+        this._menu.addAction('Konumu sıfırla', () => this._resetPosition());
+
+        this._connect(this._menu, 'open-state-changed',
+            (_menu, acik) => this._onMenuOpen(acik));
+    }
+
+    /** Menü açıkken animasyon DURUYOR (kare donuyor, zamanlayıcı yok).
+     *
+     * Dondurma `stop()` değil `freeze()`: menü kapanınca klip baştan değil
+     * kaldığı kareden sürüyor. Yönetmene de haber veriliyor, yoksa menü
+     * açıkken gelen bir durum değişikliği yeni klip başlatırdı.
+     */
+    _onMenuOpen(acik) {
+        if (acik) {
+            this._pauseItem?.label.set_text(this._paused ? 'Devam et' : 'Duraklat');
+            this._player?.freeze();
+            this._director?.setMenuOpen(true);
+            return;
+        }
+
+        this._player?.thaw();
+        this._director?.setMenuOpen(false);
+    }
+
+    _togglePause() {
+        this._settings.set_boolean('paused', !this._paused);
+    }
+
+    /** Konumu unut: pet bulunduğu monitörün sağ altına döner.
+     *  Monitör tercihi korunuyor — burada sıfırlanan şey KONUM. */
+    _resetPosition() {
+        this._writeInts({
+            'position-x': Layout.KAYITSIZ,
+            'position-y': Layout.KAYITSIZ,
+        });
+        console.log(`${LOG} konum sıfırlandı`);
     }
 }
