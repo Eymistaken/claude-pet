@@ -13,6 +13,17 @@ cevabını beklerken durup bekler, iş bitince laptobu kaldırır.
 
 **Hedef ortam:** GNOME Shell 46 · Wayland · Zorin OS 18 / Ubuntu 24.04
 
+> ### KDE kullanıyorsan bu dosya sana değil
+>
+> Bu README GNOME Shell eklentisini anlatıyor. **KDE Plasma, Sway, Hyprland
+> ve COSMIC** için aynı maskotun tek dosyalık AppImage sürümü var — aynı
+> animasyonlar, aynı durum mantığı, `wlr-layer-shell` üzerinden:
+> **[README-appimage.md](README-appimage.md)**.
+>
+> Ayrım tek bir protokole dayanıyor: GNOME'un kompozitörü Mutter
+> `wlr-layer-shell` desteklemiyor, KWin ve wlroots destekliyor. İki sürüm
+> `src/lib/` altındaki **aynı sekiz dosyayı** paylaşıyor.
+
 ---
 
 ## Gereksinimler

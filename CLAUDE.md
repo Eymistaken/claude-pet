@@ -62,6 +62,28 @@ Claude Code hook'ları
 Main.layoutManager.addChrome(...)   karakter: input alır · laptop: almaz
 ```
 
+## İkinci sürüm: `app/` (KDE / AppImage)
+
+Depoda maskotun iki sürümü var ve **ortak kısım `src/lib/`**:
+
+```
+src/lib/*.js · assets/animations.json · hooks/claude-pet-hook.py
+        │                                        │
+   src/extension.js                         app/main.js
+   GNOME · St + Clutter actor               KDE · GTK4 + wlr-layer-shell
+```
+
+`src/lib/` altındaki sekiz modülün hiçbiri `St`/`Main`/`global`/`Meta`
+görmüyor — yalnızca GLib/Gio/GObject. **Bu kural artık iki tüketicisi olan
+bir sözleşme:** oraya kabuğa bağlı bir satır eklemek AppImage sürümünü
+kırar. Kabuğa özgü kod `src/extension.js`e, GTK'ya özgü kod `app/`e.
+
+`app/` içindeki dosyalar `src/lib`'i **kopyalamıyor**, `../src/lib/…` diye
+import ediyor. AppImage derlenirken ağaç olduğu gibi AppDir'e kopyalanıyor.
+
+Ayrıntı: `README-appimage.md`, `tools/appimage.sh` başlığı, `app/pencere.js`
+başlığı (iki sürüm arasındaki dört ölçülmüş fark orada yazılı).
+
 ## Animasyon varlıkları
 
 Kareler kodda değil, `assets/animations.json` içinde:

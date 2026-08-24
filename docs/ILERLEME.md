@@ -917,3 +917,110 @@ Test kendi hatasını iki kez gösterdi
   üstünde doğrulamış oldu. Ad kısaltıldı.
 
 <!-- Proje fazları bitti. Yayın: metadata.json'daki version 1'de bırakıldı. -->
+
+---
+
+## Faz 7 — KDE / AppImage sürümü            2026-08-24
+
+Kullanıcı: "Bu uygulamayı başka distrolarda da kurabilmek için bir AppImage
+yap. Animasyonlar ve çalışma mantığı aynı olsun, KDE'de de çalışsın. Sistemle
+birlikte başlayan hafif bir şey olsun, tek görevi pet'i koymak; ayarlar için
+AppImage'ı açmak yetsin."
+
+Branch: `appimage`.
+
+### Dayanak
+
+İki gerçek bu fazı bir yeniden yazım olmaktan çıkardı:
+
+1. **`src/lib/` zaten kabuktan bağımsızdı.** Sekiz modülün hiçbirinde `St`,
+   `Main`, `global`, `Meta` geçmiyor. Faz 1'den beri dosya başlıklarında
+   yazılı olan bu kural, burada karşılığını verdi: yeni uygulama o dosyaları
+   **kopyalamadan** import ediyor. Regresyon kalkanı da hazır geldi —
+   `tests/` altındaki 110 iddia iki sürümü birden sınıyor.
+2. **KWin `wlr-layer-shell` konuşuyor.** `overlay` katmanı tam ekranın
+   üstünde, `set_input_region` gerçekten uygulanıyor, margin ile piksel
+   piksel konumlanıyor. Eklentideki üç hilenin (addTopChrome, unredirect
+   kapatma, laptobu ayrı `reactive: false` actor yapma) hiçbirine gerek yok.
+
+Yeniden yazılan tek şey `extension.js`'in işi. 901 satırın karşılığı 392
+satır (`app/pencere.js`) + 357 satır (`app/main.js`).
+
+Yapılanlar
+- `app/` ağacı: `main.js` (tek örnek, zincir kurulumu), `pencere.js`
+  (layer-shell + çizim + sürükleme + menü), `tercihler.js` (Adw ayarlar),
+  `ayarlar.js` (şema + keyfile arka uç), `ekran.js` (Gdk → layout.js köprüsü),
+  `entegrasyon.js` (hook / autostart / menü girdisi).
+- `tools/appimage.sh`: sudo'suz sysroot → gtk4-layer-shell derlemesi → AppDir
+  → `ldd` kapanışı → appimagetool. `tools/toolchain.sh`, `tools/ikon.js`.
+- `Makefile`: `app`, `app-run`, `appimage`, `ikon`.
+- `README-appimage.md`, ana README'ye yönlendirme, CLAUDE.md'ye ortak kod
+  sözleşmesi.
+
+### Eklentiden dört bilinçli sapma
+
+1. **İki actor yerine tek pencere + giriş bölgesi.** Eklentide laptop ayrı bir
+   actor'dü çünkü Wayland'de `affectsInputRegion` atlanıyordu. Layer-shell'de
+   `Gdk.Surface.set_input_region()` gerçekten uygulanıyor; tek pencere iki
+   katmanı çiziyor, giriş bölgesi yalnızca karakter kutusu. Sonuç eklentiden
+   **daha iyi**: laptop ile karakter arasındaki boşluk artık tıklama yutmuyor.
+2. **`cell` artık `scale_factor` ile çarpılmıyor.** `St` fiziksel piksele
+   çiziyordu, GTK4 mantıksal piksele. Aynı formül HiDPI'da pet'i iki katına
+   çıkarırdı. İki sürüm arasındaki en sessiz fark; koda yorum düşüldü.
+3. **Ayarlar dconf'ta değil.** `Gio.keyfile_settings_backend_new` ile düz
+   metin `~/.config/claude-pet/ayarlar.conf`. Sebep: KDE kurulumunda dconf'un
+   varlığı garanti değil. Şema da sisteme kurulmuyor,
+   `SettingsSchemaSource.new_from_directory` ile paketin içinden okunuyor.
+   Anahtarlar birebir aynı, yani `prefs.js` neredeyse birebir taşındı.
+4. **Sürükleme artımlı.** `origin += ofset`, basma noktası sabit. Kümülatif
+   model (`yeni = başlangıç + ofset`) burada titrerdi: yüzey margin ile
+   taşındığı için kompozitör düzeltici bir motion olayı gönderiyor ve o
+   olayda ofset ~0 oluyor.
+
+### Ölçülmüş engeller
+
+- **`sudo` parola istiyor**, `libgtk-4-dev` kurulu değil. Çözüm: `apt-get
+  download` + `dpkg-deb -x` ile `build/toolchain/sysroot`. Sisteme hiçbir şey
+  yazılmadı. `apt-cache depends --recurse` KULLANILAMAZ: 473 paket ve 257 MB
+  (qemu-user ve i386 dahil) indiriyor. İki seviye yetiyor.
+- **`PKG_CONFIG_SYSROOT_DIR` `g-ir-scanner`ın yolunu da kaydırıyor.** meson
+  "distributor issue" diye durdu. Sysroot'un `usr/bin`ine sembolik bağ.
+- **`pkill -f toolchain.sh` çağıranı öldürüyor** — `tools/nested.sh` için Faz
+  0'da düşülen notun aynısı, bu kez toolchain betiğinde yaşandı.
+- **gtk4-layer-shell GJS'de `LD_PRELOAD` istiyor.** Kütüphane libwayland
+  çağrılarını shim'liyor ve `libwayland-client`'tan önce yüklenmek zorunda;
+  Python'daki `CDLL(...)` numarasının GJS'de karşılığı yok. AppRun'da
+  ayarlanıyor. `liblayer-shell-preload.so` başka bir şey (rastgele Wayland
+  uygulamaları için genel hack), o değil.
+- **Alt sürece temiz ortam.** Hook betiği konak `python3` ile çalışıyor;
+  AppRun'ın `LD_PRELOAD`/`LD_LIBRARY_PATH`i miras kalırsa konak python bizim
+  glib kopyamızı yüklemeye çalışır. `GLib.environ_unsetenv` ile temizleniyor.
+
+Doğrulama (kod düzeyi — canlı pencere testi YAPILMADI)
+- [x] `gjs -m tests/{replay,director,layout,presence}.js` → 21/50/26/13,
+      **110/110**. `src/lib` değişmediği için bu, "aynı mantık" iddiasının
+      kanıtı.
+- [x] `make check` → 17 JS + 4 Python dosyası, 0 uyarı. (Kontrol betiği yeni
+      `app/*.js` dosyalarını da ayrıştırdı.)
+- [x] AppImage üretildi: **44 MB**, 108 kütüphane, 18 typelib.
+- [x] Bağımlılık kapanışı tam: `ldd` ile tek bir "not found" yok; `libgtk-4`in
+      45 bağımlılığının tamamı AppDir içinden çözülüyor, konak GTK'sına
+      sızıntı yok.
+- [x] AppImage GNOME'da çalıştırıldı → `is_supported()` false, anlaşılır hata
+      ve çıkış kodu 2. Bu tek koşum gjs'in paketten açıldığını, 18 typelib'in
+      yüklendiğini, altı ES modülünün ayrıştırıldığını ve GTK'nın
+      başladığını da doğruluyor.
+
+Notlar / bilinen eksikler
+- **Pencere davranışı KDE'de sınanmadı.** Tıklama geçirgenliği, tam ekran,
+  sürükleme, sağ tık menüsü ve monitör seçimi gerçek bir KWin oturumunda
+  denenmedi — kullanıcı yerel kompozitör kurulmamasını istedi, test
+  `oneauraaa`ya bırakıldı. Kontrol listesi `README-appimage.md` sonunda.
+- **X11 yok.** Bilinçli: layer-shell bir Wayland protokolü, X11 karşılığı
+  override-redirect + XShape ve GTK4 ikisini de doğrudan vermiyor.
+- **glibc 2.39 tabanı** (Zorin 18'de derlendi). Debian 12 / Ubuntu 22.04 /
+  Mint 21 kapsam dışı; Arch, Fedora 40+, KDE neon 24.04, Debian 13 kapsamda.
+  Konteyner aracı kurulu olmadığı için daha eski bir tabanda derlenmedi.
+- **`sleep` klibi hâlâ yok**, dolayısıyla uyku pozu bu sürümde de yok.
+- **libadwaita ayarlar penceresi** KDE'de GNOME'lu duruyor. `src/prefs.js`i
+  yeniden yazmamak için kabul edildi.

@@ -14,7 +14,8 @@ STATE_DIR := $(HOME)/.local/state/claude-pet
 
 .PHONY: help schemas install uninstall enable disable check gif \
         nested nested-kill nested-clean nested-log preview logs pack prefs \
-        hooks unhooks hooks-status replay replay-canli
+        hooks unhooks hooks-status replay replay-canli \
+        app app-run appimage ikon
 
 help:
 	@echo "claude-pet — hedefler"
@@ -41,6 +42,11 @@ help:
 	@echo
 	@echo "  make logs          GERCEK oturumun gnome-shell logu"
 	@echo "  make pack          dagitilabilir .zip uret"
+	@echo
+	@echo "  --- KDE / AppImage surumu (app/) ---"
+	@echo "  make app-run       uygulamayi YERELDE calistir (AppImage olmadan)"
+	@echo "  make appimage      tek dosyalik AppImage uret"
+	@echo "  make ikon          simgeyi varliktan yeniden uret"
 
 # --------------------------------------------------------------------- kurulum
 
@@ -192,3 +198,27 @@ pack: check schemas
 	  schemas/gschemas.compiled
 	@echo "paket: $(BUILD)/$(UUID).shell-extension.zip"
 	@unzip -l $(BUILD)/$(UUID).shell-extension.zip | tail -n +4 | head -n -2
+
+# ------------------------------------------------------- KDE / AppImage surumu
+#
+# `app/` altindaki uygulama GNOME eklentisiyle AYNI `src/lib` dosyalarini
+# kullaniyor; buradaki hedefler yalnizca onu calistirmak ve paketlemek icin.
+# Ayrinti: tools/appimage.sh basligi ve README-appimage.md.
+
+LS_OUT := $(BUILD)/toolchain/gtk4-layer-shell/_install/usr
+
+app: ikon
+	glib-compile-schemas app/data
+
+ikon:
+	gjs -m tools/ikon.js
+
+# AppImage'siz calistirma. gtk4-layer-shell bu makinede kurulu olmadigi icin
+# derlenmis kopyasi ortamdan gosteriliyor; LD_PRELOAD ZORUNLU (kutuphane
+# libwayland cagrilarini shim'liyor ve ondan once yuklenmek zorunda).
+app-run: app
+	@test -f $(LS_OUT)/lib/libgtk4-layer-shell.so.0 || 	  { echo "once 'make appimage' calistir (gtk4-layer-shell derlenmemis)"; exit 1; }
+	GI_TYPELIB_PATH=$(LS_OUT)/lib/girepository-1.0 	LD_LIBRARY_PATH=$(LS_OUT)/lib 	LD_PRELOAD=$(LS_OUT)/lib/libgtk4-layer-shell.so.0 	gjs -m app/main.js
+
+appimage:
+	@bash tools/appimage.sh
