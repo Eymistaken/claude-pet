@@ -50,6 +50,21 @@ make enable      # enables it in the real session
 make hooks       # writes Claude Code hooks into ~/.claude/settings.json
 ```
 
+### From a release zip
+
+If you would rather not clone, every version is published as a
+`.shell-extension.zip` on the
+[releases page](https://github.com/Eymistaken/claude-pet/releases) — the ones
+tagged `ext-v*` (`v*` is the AppImage build):
+
+```sh
+gnome-extensions install --force claude-pet@eymistaken.local.shell-extension.zip
+gnome-extensions enable claude-pet@eymistaken.local
+```
+
+Then log out and back in, and run `make hooks` from a clone to wire up the
+Claude Code hooks — the pet hears nothing without them.
+
 `make hooks` leaves hooks you wrote by hand alone: it only adds its own
 entries (the ones with `claude-pet-hook.py` on the command line), takes a
 timestamped backup first, and writes the file atomically. Run

@@ -1,0 +1,99 @@
+# GNOME Shell eklentisini paketler; VERSION dosyasindaki surumun etiketi
+# henuz yoksa surum olarak yayinlar.
+#
+# ETIKET ONEKI `ext-v*`: `v*` AppImage'a ait (appimage dali). Iki dal ayni
+# surum numarasina geldiginde etiketler carpismasin diye ayri.
+#
+# metadata.json'daki `version` AYRI BIR SEY ve oyle kalmali: gnome-shell onu
+# TAM SAYI istiyor ve extensions.gnome.org'un surum sayaci o. VERSION ise
+# insanlarin okudugu semver. Ikisini karistirma.
+
+name: Extension
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'prompts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sürüm ve yayın kararı
+        id: surum
+        run: |
+          SURUM=$(tr -d ' \n\r' < VERSION)
+          echo "surum=$SURUM" >> "$GITHUB_OUTPUT"
+          if gh release view "ext-v$SURUM" >/dev/null 2>&1; then
+            echo "yayinla=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ext-v$SURUM zaten yayınlanmış — yalnızca paketlenecek."
+          else
+            echo "yayinla=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::ext-v$SURUM yeni — paketlenip yayınlanacak."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # `gnome-extensions` ARACI gnome-shell paketinde. Agir, ama `make pack`
+      # onu kullaniyor ve CI'da zip'i baska turlu uretmek IKINCI BIR KOD YOLU
+      # demek olurdu -- yerelde ve CI'da farkli sekilde paketlenen bir eklenti,
+      # ancak kullanicida patlayan bir fark uretir.
+      - name: Bağımlılıklar
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gnome-shell gjs libglib2.0-bin zip
+
+      - name: Testler
+        run: |
+          make check
+          make replay
+
+      - name: Paketle
+        run: |
+          make pack
+          unzip -l build/claude-pet@eymistaken.local.shell-extension.zip
+
+      # `gnome-extensions pack` DERLENMIS SEMAYI koymuyor (olculdu) ve
+      # Makefile onu elle ekliyor. Zip'ten kuran biri icin eksik sema,
+      # eklentinin hic acilmamasi demek -- o yuzden burada bir kez daha
+      # dogrulaniyor.
+      - name: Pakette derlenmiş şema var mı
+        run: |
+          Z=build/claude-pet@eymistaken.local.shell-extension.zip
+          unzip -l "$Z" | grep -q 'schemas/gschemas.compiled' \
+            || { echo "PAKETTE gschemas.compiled YOK"; exit 1; }
+          unzip -l "$Z" | grep -q 'lib/sprite.js' \
+            || { echo "PAKETTE lib/ YOK"; exit 1; }
+          unzip -l "$Z" | grep -q 'assets/animations.json' \
+            || { echo "PAKETTE assets/ YOK"; exit 1; }
+          echo "paket tam"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: claude-pet-extension-${{ steps.surum.outputs.surum }}
+          path: build/claude-pet@eymistaken.local.shell-extension.zip
+
+      - name: Yayınla
+        if: steps.surum.outputs.yayinla == 'true'
+        run: |
+          SURUM="${{ steps.surum.outputs.surum }}"
+          gh release create "ext-v$SURUM" \
+            --target "$GITHUB_SHA" \
+            --title "Extension ext-v$SURUM" \
+            --generate-notes \
+            --notes-file .github/release-notes-extension.md \
+            build/claude-pet@eymistaken.local.shell-extension.zip
+        env:
+          GH_TOKEN: ${{ github.token }}

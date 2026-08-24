@@ -193,6 +193,21 @@ Bir işi bitirdim demeden önce:
 - `src/lib/`e dokunulduysa `appimage` dalını da düşün: orası aynı dosyaları
   kullanıyor.
 
+## Sürüm ve yayın
+
+`VERSION` dosyası tek kaynak. `.github/workflows/extension.yml` her itmede
+paketliyor ama **yalnızca `ext-v<VERSION>` etiketi henüz yoksa** sürüm
+yayınlıyor. Yani yayın için yapılacak tek şey `VERSION`ı artırmak.
+
+- `ext-v*` bu dalın (eklenti). `v*` AppImage'a ait — `appimage` dalı.
+- `metadata.json`daki `version` AYRI: gnome-shell onu **tam sayı** istiyor ve
+  extensions.gnome.org'un sürüm sayacı o. `VERSION` ise insanın okuduğu
+  semver. İkisini karıştırma.
+- CI `make check` + `make replay` çalıştırıyor ve pakette
+  `gschemas.compiled`, `lib/`, `assets/` olduğunu ayrıca doğruluyor —
+  `gnome-extensions pack` derlenmiş şemayı koymuyor ve eksik şema, zip'ten
+  kuran biri için eklentinin hiç açılmaması demek.
+
 ## Yol haritası
 
 Fazlar (0–6) bitti; sonrasında iki ekleme yapıldı (tam ekran görünürlüğü ve
