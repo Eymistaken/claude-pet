@@ -42,9 +42,11 @@ adim() { printf '\n\033[1m>>> %s\033[0m\n' "$*"; }
 # --------------------------------------------------------- 0-1  derleme zinciri
 
 adim "derleme zinciri"
-bash "$KOK/tools/toolchain.sh" >/dev/null
+bash "$KOK/tools/toolchain.sh"
 SR="$TC/sysroot"
-export PATH="$TC/venv/bin:$PATH"
+# Sysroot yalnizca gelistirme makinesinde var (bkz. tools/toolchain.sh). CI'da
+# gtk4 gelistirme dosyalari sistemde oldugu icin ikisi de atlaniyor.
+[ -x "$TC/venv/bin/meson" ] && export PATH="$TC/venv/bin:$PATH"
 
 if [ ! -f "$LS_OUT/lib/libgtk4-layer-shell.so.0" ]; then
     adim "gtk4-layer-shell derleniyor"
@@ -54,13 +56,16 @@ if [ ! -f "$LS_OUT/lib/libgtk4-layer-shell.so.0" ]; then
         tar xzf "$TC/ls.tgz" -C "$TC"
         mv "$TC/gtk4-layer-shell-1.3.0" "$LS_SRC"
     }
-    # g-ir-scanner konak sistemde; PKG_CONFIG_SYSROOT_DIR onu de sysroot'a
-    # kaydirdigi icin bag kuruluyor.
-    mkdir -p "$SR/usr/bin"
-    for t in $(ls /usr/bin | grep -i 'g-ir'); do ln -sf "/usr/bin/$t" "$SR/usr/bin/$t"; done
-    export PKG_CONFIG_PATH="$SR/usr/lib/x86_64-linux-gnu/pkgconfig:$SR/usr/share/pkgconfig"
-    export PKG_CONFIG_SYSROOT_DIR="$SR"
-    export XDG_DATA_DIRS="$SR/usr/share:/usr/share"
+    if [ -d "$SR/usr/lib" ]; then
+        # g-ir-scanner konak sistemde; PKG_CONFIG_SYSROOT_DIR onu de sysroot'a
+        # kaydirdigi icin bag kuruluyor (meson aksi halde "distributor issue"
+        # deyip duruyor).
+        mkdir -p "$SR/usr/bin"
+        for t in $(ls /usr/bin | grep -i 'g-ir'); do ln -sf "/usr/bin/$t" "$SR/usr/bin/$t"; done
+        export PKG_CONFIG_PATH="$SR/usr/lib/x86_64-linux-gnu/pkgconfig:$SR/usr/share/pkgconfig"
+        export PKG_CONFIG_SYSROOT_DIR="$SR"
+        export XDG_DATA_DIRS="$SR/usr/share:/usr/share"
+    fi
     ( cd "$LS_SRC" && rm -rf _b _install &&
       meson setup _b -Dexamples=false -Ddocs=false -Dtests=false \
           -Dintrospection=true -Dvapi=false --prefix=/usr --libdir=lib >/dev/null &&

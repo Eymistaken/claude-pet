@@ -13,6 +13,16 @@ TC="$KOK/build/toolchain"
 SYSROOT="$TC/sysroot"
 VENV="$TC/venv"
 
+# CI'DA BU BETIK HICBIR SEY YAPMAZ. Sysroot numarasi yalnizca gelistirme
+# makinesi icin: orada `sudo` parola istiyor. GitHub Actions'ta paketler
+# dogrudan kurulabildigi icin sistem zinciri yeterli ve buradan cikiliyor --
+# tek kod yolu, iki ortam.
+if pkg-config --exists gtk4 && command -v meson >/dev/null 2>&1 &&
+   command -v ninja >/dev/null 2>&1; then
+    echo "sistem zinciri yeterli (gtk4 dev + meson + ninja) — sysroot atlaniyor"
+    exit 0
+fi
+
 mkdir -p "$TC/debs" "$SYSROOT"
 
 if [ ! -x "$VENV/bin/meson" ]; then
