@@ -65,6 +65,7 @@ Pet'e **sağ tıkla**: Duraklat · Ayarlar · Konumu sıfırla.
 
 | Ayar | Ne yapar |
 |---|---|
+| **Pet** | Genel anahtar. Kapatılınca maskot hiç görünmez — Claude çalışıyor olsa bile. Süreç yoklaması da durur. |
 | Boyut | Bir sprite hücresinin piksel kenarı (1–8). Tam sayı, yani büyütmek bulanıklaştırmıyor. |
 | Laptop | Laptop katmanı çizilsin mi. |
 | Boşta kalma süresi | Bu kadar saniye hiç olay gelmezse pet çalışmayı bırakmış sayar. 0: kapalı. |
@@ -132,12 +133,21 @@ değil: masaüstü uygulaması arka planda, küçültülmüş, başka pencerenin
 olabilir — süreç ayaktaysa pet de ayakta. Terminalde açılan Claude Code de
 aynı şekilde sayılıyor.
 
-| Ne açık | Pet |
-|---|---|
-| Claude masaüstü uygulaması (arka planda bile) | var |
-| Terminalde `claude` | var |
-| İkisi birden | var |
-| Hiçbiri | **yok** — aktörler gizli, zamanlayıcı yok, unredirect geri verilmiş |
+| Ayardaki anahtar | Claude | Pet |
+|---|---|---|
+| açık | masaüstü uygulaması (arka planda bile) | var |
+| açık | terminalde `claude` | var |
+| açık | ikisi birden | var |
+| açık | hiçbiri | **yok** |
+| **kapalı** | (fark etmez) | **yok** |
+
+Pet yokken aktörler gizli, hiçbir zamanlayıcı kurulu değil ve unredirect geri
+verilmiş. Ayardaki anahtar kapalıyken süreç yoklaması da durur — kapalı bir
+pet hiçbir şey tüketmez.
+
+Anahtar kapalıyken ekranda tıklanacak bir pet olmadığı için geri açmak da
+ayarlar penceresinden: `gnome-extensions prefs claude-pet@eymistaken.local`
+ya da Uzantılar uygulaması.
 
 Ölçüt **pencere değil süreç**: `/proc` içinde `claude-desktop` ya da `claude`
 adında bir süreç var mı. Pencereye bakan bir yöntem (`Shell.AppSystem`)
@@ -260,8 +270,9 @@ oturumda yapılıyor: `make nested`.
 - **Claude açıkken unredirect kapalı tutuluyor**, yani tam ekran oyun/video
   doğrudan ekrana basılamıyor. Görünürlüğün bedeli bu. Claude kapalıyken
   bedel de yok.
-- **Pet'in her zaman görünmesini isteyenler için ayar yok.** Ölçüt sabit:
-  Claude çalışmıyorsa pet yok.
+- **Pet'in Claude kapalıyken de görünmesini isteyenler için ayar yok.**
+  Ayardaki anahtar pet'i tamamen kapatıyor, "her zaman göster" diye bir
+  seçenek yok: ölçüt sabit, Claude çalışmıyorsa pet yok.
 - **Ekran ölçeği (`scale_factor`) canlı izlenmiyor.** Ekran ölçeğini
   %100 → %200 yaparsan pet, bir sonraki ayar değişikliğine kadar eski hücre
   boyutunda kalıyor.

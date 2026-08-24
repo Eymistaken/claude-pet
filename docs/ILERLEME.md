@@ -879,4 +879,41 @@ Notlar
 - Pet'i Claude kapalıyken de görmek isteyen için ayar YOK; istenirse
   `laptop-enabled` gibi bir anahtar bir saatlik iş.
 
+## Faz sonrası — genel açma/kapama anahtarı            2026-08-24
+
+Kullanıcı: "Ayarlarına genel bir on/off switch ekler misin, kapatırsam Claude
+açıkken de pet görünmesin."
+
+Yapılanlar
+- Şemaya `enabled` (b, varsayılan true). Açıklamasında `paused` ile farkı
+  yazıyor: o pet'i ekranda bırakıp dondurur, bu tamamen kaldırır.
+- `prefs.js`: en üstte, kendi grubunda bir `Adw.SwitchRow`. Ötekilerle aynı
+  sırada değil çünkü ötekilerin üstünde — kapalıyken aşağıdakilerin hiçbirinin
+  gözle görülür etkisi yok. Alt yazısı geri açmanın buradan olduğunu söylüyor
+  (ekranda tıklanacak pet kalmıyor).
+- `extension.js`: görünürlüğün TEK uygulama noktası `_applyGorunurluk()`.
+  İki sebep (ayar, Claude'un varlığı) `_gosterilsin` içinde birleşiyor, yani
+  biri ötekini ezemiyor. Anahtar kapatılınca süreç yoklaması da duruyor;
+  açılınca `start()` ilk cevabı hemen verdiği için pet o anda geliyor.
+
+Doğrulama (nested, `CLAUDE_PET_PROCESSES=cpetsahte`) — dört hâlin dördü
+- [x] anahtar kapalı + Claude açık → `unredirect geri verildi` + `pet kapalı
+      (ayar)`; pet yok
+- [x] anahtar kapalı + Claude öldürüldü → **hiçbir satır yok** (yoklama
+      gerçekten durmuş)
+- [x] anahtar açık + Claude yok → yalnızca `pet açık (ayar)`; `pet görünür`
+      YOK, unredirect kapatılmıyor
+- [x] anahtar açık + Claude geri geldi → `claude açık` + `unredirect
+      kapatıldı` + `pet görünür (cpetsahte)`
+- [x] `make check`, `make replay` (21/50/26/13)
+
+Test kendi hatasını iki kez gösterdi
+- **`sleep` sahte Claude olarak kullanılamaz.** Sistemde her an başka birinin
+  `sleep`i çalışıyor olabiliyor — testi süren kabuğun kendisi bile. Bir
+  doğrulama turu bu yüzden yanlış "Claude açık" okudu. Artık `sleep` benzersiz
+  bir ada kopyalanıyor.
+- **`comm` 15 karaktere kırpılıyor.** İlk benzersiz ad `cpet-sahte-12345`
+  (16 karakter) idi ve süreç hiç bulunamadı; test, koddaki kuralı kendi
+  üstünde doğrulamış oldu. Ad kısaltıldı.
+
 <!-- Proje fazları bitti. Yayın: metadata.json'daki version 1'de bırakıldı. -->

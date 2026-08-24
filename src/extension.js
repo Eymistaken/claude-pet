@@ -113,6 +113,7 @@ export default class ClaudePetExtension extends Extension {
         // Claude kapaliyken pet hic gorunmuyor; ilk cevap gelene kadar da
         // gorunmesin diye baslangic false.
         this._present = false;
+        this._enabled = true;
         // Fazın merkezî iddiası ölçülebilir kalsın: kare sayısı yüzlerceyken
         // boyutlandırma sayısı animasyon değişimi kadar olmalı.
         this._frameCount = 0;
@@ -127,6 +128,7 @@ export default class ClaudePetExtension extends Extension {
             this._sheet = loadAnimations(
                 GLib.build_filenamev([this.path, 'assets', 'animations.json']));
 
+            this._enabled = this._settings.get_boolean('enabled');
             this._laptopEnabled = this._settings.get_boolean('laptop-enabled');
             this._paused = this._settings.get_boolean('paused');
             this._cell = this._readCell();
@@ -137,9 +139,11 @@ export default class ClaudePetExtension extends Extension {
             // `start()` ilk cevabı hemen veriyor, yani Claude kapalıyken pet
             // tek kare bile görünmüyor.
             this._presence = new Presence();
-            this._present = this._presence.start();
             this._connect(this._presence, 'changed',
                 (_p, varMi, ad) => this._applyPresence(varMi, ad));
+            // Genel anahtar kapaliysa yoklama da baslamiyor: kapali pet
+            // hicbir sey tuketmiyor.
+            this._present = this._enabled ? this._presence.start() : false;
 
             // Zincir: tracker (ne oluyor) → director (ne oynayacak) →
             // player (ne zaman) → sprite (nasıl çizilecek).
@@ -159,7 +163,7 @@ export default class ClaudePetExtension extends Extension {
             // yalnızca uykuyu kurmuyor.
             if (this._paused)
                 this._director.setPaused(true);
-            if (!this._present)
+            if (!this._gosterilsin)
                 this._director.setAbsent(true);
             this._director.start();
 
@@ -183,7 +187,7 @@ export default class ClaudePetExtension extends Extension {
             this._tracker.start();
 
             this._watchSettings();
-            if (this._present)
+            if (this._gosterilsin)
                 this._holdUnredirect();
 
             // Monitör takılıp çıkarıldığında ya da çözünürlük değiştiğinde
@@ -192,6 +196,7 @@ export default class ClaudePetExtension extends Extension {
                 () => this._onMonitorsChanged());
 
             console.log(`${LOG} etkin · ${this._chromeYolu} · ` +
+                `${this._enabled ? '' : 'PET KAPALI (ayar) · '}` +
                 `claude ${this._present ? 'açık' : 'KAPALI (pet gizli)'} · ` +
                 `ızgara (${this._originX}, ${this._originY}) · ` +
                 `monitör ${this._monitorIndex} · hücre ${this._cell}px · ` +
@@ -369,6 +374,7 @@ export default class ClaudePetExtension extends Extension {
         const izle = (anahtar, fn) =>
             this._connect(this._settings, `changed::${anahtar}`, fn);
 
+        izle('enabled', () => this._applyEnabled());
         izle('scale', () => this._applyScale());
         izle('laptop-enabled', () => this._applyLaptop());
         izle('paused', () => this._applyPaused());
@@ -418,6 +424,29 @@ export default class ClaudePetExtension extends Extension {
         console.log(`${LOG} boşta kalma süresi ${ms / 1000} sn`);
     }
 
+    /** Pet ekranda olacak mı: genel anahtar açık VE Claude çalışıyor. */
+    get _gosterilsin() {
+        return this._enabled && this._present;
+    }
+
+    /** Genel anahtar (`enabled`) değişti.
+     *
+     * Kapatınca süreç yoklaması da duruyor — kapalı bir pet hiçbir şey
+     * tüketmesin. Açınca `start()` ilk cevabı hemen veriyor, yani anahtar
+     * açıldığı anda Claude çalışıyorsa pet o anda geliyor.
+     */
+    _applyEnabled() {
+        this._enabled = this._settings.get_boolean('enabled');
+
+        if (this._enabled)
+            this._present = this._presence?.start() ?? false;
+        else
+            this._presence?.stop();
+
+        this._applyGorunurluk(this._presence?.name ?? '');
+        console.log(`${LOG} pet ${this._enabled ? 'açık' : 'kapalı'} (ayar)`);
+    }
+
     /** Claude açıldı ya da kapandı.
      *
      * Pet'in var olma şartı: Claude ya masaüstü uygulaması olarak ya da
@@ -427,15 +456,24 @@ export default class ClaudePetExtension extends Extension {
      */
     _applyPresence(varMi, ad) {
         this._present = varMi;
-        this._director?.setAbsent(!varMi);
+        this._applyGorunurluk(ad);
+        console.log(`${LOG} pet ${this._gosterilsin ? `görünür (${ad})` : 'gizlendi · claude kapalı'}`);
+    }
 
-        if (varMi)
+    /** Görünürlüğün TEK uygulama noktası: iki sebep de (ayar, Claude) buradan
+     *  geçiyor, yani ikisi birbirini ezmiyor. */
+    _applyGorunurluk(ad) {
+        void ad;
+        const goster = this._gosterilsin;
+
+        this._director?.setAbsent(!goster);
+
+        if (goster)
             this._holdUnredirect();
         else
             this._releaseUnredirect();
 
         this._syncVisibility();
-        console.log(`${LOG} pet ${varMi ? `görünür (${ad})` : 'gizlendi · claude kapalı'}`);
     }
 
     // ------------------------------------------------------------ tam ekran
@@ -532,7 +570,7 @@ export default class ClaudePetExtension extends Extension {
             // tek fark koşulun kaynağı.
             // Claude kapalıysa hiçbir katman görünmüyor: pet'in var olma
             // şartı bu (`lib/presence.js`).
-            const gorunur = this._present &&
+            const gorunur = this._gosterilsin &&
                 !!this._boxes?.[ad] && !!kare?.[ad]?.box &&
                 (ad !== LAPTOP_KATMANI || this._laptopEnabled);
 

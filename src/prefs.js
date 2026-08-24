@@ -61,6 +61,23 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
             icon_name: 'face-smile-symbolic',
         });
 
+        // -------------------------------------------------------------- genel
+
+        // EN ÜSTTE ve kendi grubunda: bu anahtar ötekilerle aynı sırada
+        // değil, ötekilerin ÜSTÜNDE. Kapalıyken aşağıdakilerin hiçbirinin
+        // gözle görülür bir etkisi yok.
+        const genel = new Adw.PreferencesGroup();
+
+        const acik = new Adw.SwitchRow({
+            title: 'Pet',
+            subtitle: 'Kapatılınca maskot hiç görünmez — Claude çalışıyor olsa ' +
+                'bile. Geri açmak buradan; ekranda tıklanacak bir pet olmuyor.',
+        });
+        settings.bind('enabled', acik, 'active', Gio.SettingsBindFlags.DEFAULT);
+        genel.add(acik);
+
+        page.add(genel);
+
         // ------------------------------------------------------------ görünüm
 
         const gorunum = new Adw.PreferencesGroup({

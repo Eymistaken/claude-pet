@@ -47,6 +47,17 @@
       </description>
     </key>
 
+    <key name="enabled" type="b">
+      <default>true</default>
+      <summary>Pet acik mi</summary>
+      <description>
+        Genel anahtar. Kapatilinca maskot hic gorunmez -- Claude calisiyor
+        olsa bile. Hicbir zamanlayici kurulmaz, surec yoklamasi da durur.
+        `paused` ile karistirilmasin: o pet'i ekranda birakip dondurur,
+        bu tamamen kaldirir.
+      </description>
+    </key>
+
     <key name="scale" type="i">
       <default>3</default>
       <range min="1" max="8"/>

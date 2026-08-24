@@ -3,8 +3,14 @@
  *
  * GERÇEK SÜREÇLERLE sınanıyor, sahte bir /proc ile değil: bu kodun tek işi
  * çekirdeğin verdiği listeyi doğru okumak, o yüzden taklit etmek testi
- * anlamsızlaştırırdı. Aranan ad dışarıdan verilebildiği için `sleep`
- * süreçleri Claude'un yerine geçiyor — doğup ölmesi bizim elimizde.
+ * anlamsızlaştırırdı. Aranan ad dışarıdan verilebildiği için sahte bir
+ * "Claude" süreci Claude'un yerine geçiyor — doğup ölmesi bizim elimizde.
+ *
+ * SÜRECİN ADI BENZERSİZ OLMALI. İlk sürüm `sleep` kullanıyordu ve yanlış
+ * sonuç verdi: sistemde her an başka birinin `sleep`i çalışıyor olabiliyor
+ * (bu testi süren kabuğun kendisi bile). "Yok" iddiaları o yüzden rastgele
+ * geçip kalıyordu. Şimdi `sleep` geçici bir ada kopyalanıyor; `comm` o
+ * kopyanın adını veriyor, yani aranan ad yalnızca bize ait.
  *
  * Kullanım:  gjs -m tests/presence.js     (`make replay` bunu da çalıştırır)
  */
@@ -12,6 +18,38 @@
 import GLib from 'gi://GLib';
 
 import {Presence, SURECLER} from '../src/lib/presence.js';
+
+/** Yalnızca bu koşuma ait bir süreç adı.
+ *
+ * KISA OLMALI: `comm` 15 karaktere kırpılıyor. İlk deneme
+ * `cpet-sahte-12345` (16) idi ve süreç hiç bulunamadı — testin kendisi
+ * koddaki kuralı doğrulamış oldu. */
+const SAHTE = `cpet${Math.floor(Math.random() * 10000)}`;
+const SAHTE_YOL = GLib.build_filenamev([GLib.get_tmp_dir(), SAHTE]);
+
+/** `sleep`i benzersiz bir adla kopyala: `comm` kopyanın adını veriyor. */
+function sahteKur() {
+    const kaynak = ['/bin/sleep', '/usr/bin/sleep'].find(y =>
+        GLib.file_test(y, GLib.FileTest.EXISTS));
+    if (!kaynak)
+        throw new Error('sleep bulunamadı');
+    const [, cikti] = GLib.file_get_contents(kaynak);
+    GLib.file_set_contents(SAHTE_YOL, cikti);
+    GLib.spawn_command_line_sync(`chmod +x ${SAHTE_YOL}`);
+}
+
+/** Sahte Claude'u başlat; döner: pid. */
+function sahteBaslat() {
+    const [, pid] = GLib.spawn_async(null, [SAHTE_YOL, '30'], null,
+        GLib.SpawnFlags.DO_NOT_REAP_CHILD, null);
+    // Toplanmayan çocuk ZOMBİ kalıyor ve /proc'ta adıyla durmaya devam
+    // ediyor. Kod zombiyi zaten saymıyor ama testin de gerçekçi olması için
+    // çocuk düzgün toplanıyor.
+    GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, () => GLib.spawn_close_pid(pid));
+    return pid;
+}
+
+sahteKur();
 
 let gecti = 0;
 let kaldi = 0;
@@ -64,15 +102,9 @@ ol('`comm` 15 karakter sınırına sığıyorlar',
 // ------------------------------------------------- süreç ölünce haber var
 
 {
-    // Kendi "Claude"umuzu açıyoruz: adı `sleep`, ömrü bizim elimizde.
-    const [, pid] = GLib.spawn_async(null, ['sleep', '30'], null,
-        GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD, null);
-    // Toplanmayan çocuk ZOMBİ kalıyor ve /proc'ta adıyla durmaya devam
-    // ediyor. Kod zombiyi zaten saymıyor ama testin de gerçekçi olması için
-    // çocuk düzgün toplanıyor.
-    GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, () => GLib.spawn_close_pid(pid));
-
-    const p = new Presence({names: ['sleep'], intervalMs: 150});
+    // Kendi "Claude"umuzu açıyoruz: adı bize özel, ömrü bizim elimizde.
+    const pid = sahteBaslat();
+    const p = new Presence({names: [SAHTE], intervalMs: 150});
     const olaylar = [];
     p.connect('changed', (_p, varMi) => olaylar.push(varMi));
 
@@ -109,15 +141,13 @@ ol('`comm` 15 karakter sınırına sığıyorlar',
 // ------------------------------------------------ süreç doğunca haber var
 
 {
-    const p = new Presence({names: ['sleep'], intervalMs: 150});
+    const p = new Presence({names: [SAHTE], intervalMs: 150});
     const olaylar = [];
     p.connect('changed', (_p, varMi) => olaylar.push(varMi));
     ol('süreç yokken yok diyor', p.start() === false);
 
     const dongu = new GLib.MainLoop(null, false);
-    const [, pid] = GLib.spawn_async(null, ['sleep', '30'], null,
-        GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD, null);
-    GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, () => GLib.spawn_close_pid(pid));
+    const pid = sahteBaslat();
 
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
         ol('süreç doğunca "var" olayı geliyor',
@@ -130,6 +160,8 @@ ol('`comm` 15 karakter sınırına sığıyorlar',
     });
     dongu.run();
 }
+
+GLib.unlink(SAHTE_YOL);
 
 print('');
 print(`${gecti}/${gecti + kaldi} geçti`);
