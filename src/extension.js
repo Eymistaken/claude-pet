@@ -530,7 +530,7 @@ export default class ClaudePetExtension extends Extension {
             return;
 
         try {
-            Main.notify('Claude Code', 'Girdi bekleniyor.');
+            Main.notify('Claude Code', 'Waiting for input.');
         } catch (error) {
             console.warn(`${LOG} bildirim gönderilemedi: ${error}`);
         }
@@ -859,9 +859,9 @@ export default class ClaudePetExtension extends Extension {
         this._menuManager = new PopupMenu.PopupMenuManager(pet);
         this._menuManager.addMenu(this._menu);
 
-        this._pauseItem = this._menu.addAction('Duraklat', () => this._togglePause());
-        this._menu.addAction('Ayarlar', () => this.openPreferences());
-        this._menu.addAction('Konumu sıfırla', () => this._resetPosition());
+        this._pauseItem = this._menu.addAction('Pause', () => this._togglePause());
+        this._menu.addAction('Settings', () => this.openPreferences());
+        this._menu.addAction('Reset position', () => this._resetPosition());
 
         this._connect(this._menu, 'open-state-changed',
             (_menu, acik) => this._onMenuOpen(acik));
@@ -875,7 +875,7 @@ export default class ClaudePetExtension extends Extension {
      */
     _onMenuOpen(acik) {
         if (acik) {
-            this._pauseItem?.label.set_text(this._paused ? 'Devam et' : 'Duraklat');
+            this._pauseItem?.label.set_text(this._paused ? 'Resume' : 'Pause');
             this._player?.freeze();
             this._director?.setMenuOpen(true);
             return;
