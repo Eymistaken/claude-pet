@@ -653,4 +653,111 @@ Notlar / bilinen eksikler
   kurulumda prefs şemayı bulamayabilir.
 - `docs/PLAN.md`'ye yine dokunulmadı (kullanıcı isteği).
 
-<!-- Sıradaki: Faz 6 — prompts/faz-6-paketleme.md -->
+## Faz 6 — Paketleme ve yayına hazırlık            2026-08-24
+
+Yapılanlar
+- **`make check`** (`tools/kontrol.py`): metadata/UUID tutarlılığı (uuid =
+  Makefile UUID = kurulum dizini adı, shell-version 46, settings-schema
+  gerçekten şemada tanımlı), `animations.json` biçimi (her kare `h` satır,
+  her satır `w` karakter, palet dışı karakter yok, `holds` uzunluğu kare
+  sayısına eşit, fps > 0, eklentinin aradığı yedi klip mevcut),
+  `glib-compile-schemas --strict --dry-run`, JS ve Python sözdizimi.
+- **`make pack`** artık gerçekten dağıtılabilir bir zip üretiyor: `check`e
+  bağlı, varlıkları bir sahne dizininden alıyor (yedekler pakete girmiyor) ve
+  **derlenmiş şemayı** elle ekliyor.
+- **`make uninstall`** üç yeri birden temizliyor: eklenti dizini, hook
+  girdileri, olay kutusu. GSettings anahtarları bilerek kalıyor; silme komutu
+  ekrana yazılıyor.
+- **`make gif`** (`tools/gif.py` + `tools/kayit.js`): README'deki
+  `docs/pet.gif`. Ekran kaydı değil — kareler doğrudan `src/lib/sprite.js` ile
+  çiziliyor, yani belgedeki görüntü kabuğun çizdiğinin aynısı; kare süreleri
+  varlığın kendi `holds`/`fps` değerleri.
+- **`README.md` baştan yazıldı.** Gereksinimler, doğrulanmış kurulum komutları,
+  ayarlar tablosu, sorun giderme, bilinen eksikler, GIF.
+- **`LICENSE`** (MIT, Eymistaken) + karakterin Anthropic'e ait olduğu ve bu
+  projenin resmî olmadığı notu.
+
+README'de düzeltilen iki yanlış
+- **Hook tablosu Faz 3 öncesinden kalmış.** 12 olay ve araç adı eşlemesi
+  (`PreToolUse · Bash → koşturur`) yazıyordu; gerçek yedi olay ve üç durum,
+  araç adına hiç bakılmıyor. Tablo yeniden yazıldı.
+- **`affectsInputRegion: true // input bölgesi = sadece bu actor`** yorumu
+  yanıltıcıydı: Faz 2'de ölçüldü, Wayland'de bu bayrak hiçbir şey yapmıyor.
+  Tıklama yutmayı engelleyen şey `reactive: false`. README artık ölçümü
+  yazıyor.
+
+Doğrulama
+- [x] `make check` geçiyor  → 5 bölüm, hepsi TAMAM. Sınandı da: `layout.js`'e
+      geçici olarak `const bozuk = {;` eklendi, kontrol `HATA` verip 1 ile
+      çıktı, dosya geri alındı.
+- [x] `make pack` zip üretiyor; içinde `assets/` ve derlenmiş şema var
+      → 40 KB, 17 girdi: `assets/animations.json` (yedekler YOK), `lib/` (7),
+      `schemas/` (xml + `gschemas.compiled`), `prefs.js`, `extension.js`,
+      `metadata.json`.
+- [x] Temiz kaldırma sonrası iz kalmıyor  → `make uninstall` sonrası eklenti
+      dizini yok, durum dizini yok, `settings.json`'daki 7 girdi silinmiş.
+      Kalan tek iz `~/.config/ibus/bus/…-claude-pet-nested` — o eklentinin
+      değil, `make nested`'in ibus artığı.
+- [x] **Elle yazılmış hook'a dokunulmuyor** (kaldırmada da)  → önce elle bir
+      `SessionStart` hook'u eklendi, `make uninstall` sonrası claude-pet
+      girdileri 0, elle yazılan 1 olarak duruyor. Test sonrası kaldırıldı;
+      kullanıcının `settings.json`'ı hook dışında bit bit aynı.
+- [x] Sıfırdan kurulum README'deki komutlarla çalışıyor  → `make install`
+      (kabuk kendiliğinden `INITIALIZED` gördü) → `make enable` (`ACTIVE`) →
+      `make hooks`.
+- [x] **Gerçek oturumda (iç içe değil) pet çalışıyor**  → gerçek kabuğun
+      logunda `etkin · ızgara (3672, 954) · monitör 0 · hücre 3px`, ardından
+      bu oturumun araç çağrılarıyla `durum: WORKING` ve
+      `yönetmen: IDLE → WORKING · laptop_out → typing`. Ekran görüntüsüyle
+      de bakıldı: pet sağ alt köşede, laptop önünde.
+      Ayrıca kullanıcı doğrulama sırasında pet'i kendisi kullandı ve gerçek
+      oturumun logunda göründü: `konum kaydedildi · monitör 0 · (1752, 926)`
+      (sürükleme), `yönetmen: duraklatıldı · nötr kare` → `yönetmen: devam ·
+      hedef WORKING`, `boşta kalma süresi 180 sn`, `laptop katmanı açık`.
+- [x] Zip'ten kurulum (yabancının yolu) çalışıyor  → `gnome-extensions install
+      --force` ile kuruldu, ağaç 13 dosya, `gschemas.compiled` yerinde,
+      yedek varlık sızmamış. TAZE bir kabukta (`make nested`) `ACTIVE` ve
+      `etkin` satırı; ayarlar penceresi de o kopyadan açıldı, logda hata yok.
+      `gsettings --schemadir <kurulum>/schemas` yedi anahtarı da okuyor.
+- [x] `README.md`'deki her komut denendi  → `make check/install/enable/hooks/
+      hooks-status/uninstall/pack/gif/preview/replay/nested`,
+      `gnome-shell --version`, `gnome-extensions info`, `journalctl … | grep`,
+      `ls ~/.local/state/claude-pet/inbox/`,
+      `cat /proc/sys/fs/inotify/max_user_instances`,
+      `dconf reset -f /org/gnome/shell/extensions/claude-pet/`.
+- [x] `git status` temiz; `.gitignore` derlenmiş şemayı, zip'i ve
+      `build/`i dışarıda bırakıyor.
+
+Yapılmayan tek adım
+- **Oturum kapatılıp açılmadı.** Prompt'un temiz kurulum listesinde "oturumu
+  kapat aç" var; bu, bu Claude Code oturumunu ve kullanıcının açık
+  uygulamalarını kapatmak demek. Onun yerine aynı şeyin ölçülebilir kısmı
+  yapıldı: paketlenmiş kopya **taze bir gnome-shell process'inde** (nested)
+  sıfırdan yüklendi ve `ACTIVE` oldu; gerçek oturumda da eklenti kurulup
+  etkinleştirildi ve çalışıyor. Doğrulanmamış tek şey, oturum açılışında
+  kabuğun eklentiyi kendiliğinden yüklemesi — ki nested oturum tam olarak
+  o yolu kullanıyor.
+
+Notlar
+- **`node --check` işe yaramıyor.** Node 24 ESM algılamasıyla `const a = {;`
+  içeren bir dosyaya 0 dönüyor. Sözdizimi kontrolü gjs'in SpiderMonkey'ine
+  yaptırılıyor: `Reflect.parse(kaynak, {target: 'module'})` ayrıştırır,
+  çalıştırmaz, import'ları çözmez. gjs zaten her GNOME kurulumunda var.
+- **`gnome-extensions pack` derlenmiş şemayı koymuyor** (ölçüldü: zip
+  listesinde yalnızca `.gschema.xml` vardı). Oysa `getSettings()` →
+  `SettingsSchemaSource.new_from_directory()` derlenmiş dosyayı arıyor.
+  `pack` artık onu `zip` ile ekliyor.
+- **`--extra-source` mutlak yol istiyor.** Göreli verilince sessizce hiçbir
+  şey eklemiyor: `assets/` bir pakette tamamen eksik çıktı, hata yok.
+- **`docs/PLAN.md`'ye yine dokunulmadı.** Faz 6 prompt'u "Sonraki fazlara
+  notlar"ı gözden geçirip taşımayı istiyor; kullanıcının duran talimatı ise
+  PLAN.md'yi güncellememek. Notlar okundu, kullanıcıyı ilgilendirenler
+  README'nin "Bilinen eksikler" ve "Sorun giderme" bölümlerine taşındı
+  (bozuk varlıkta pet görünmüyor, `gnome-extensions enable` tuzağı, uyku
+  klibi yok, prefs penceresinin pet'in üstünde açılması, `scale_factor`
+  canlı izlenmiyor, geçiş klibi yarışı). Geliştiriciyi ilgilendirenler
+  (Clutter.DragAction yok, sprite.js kabuktan bağımsız kalsın, GJS Cairo
+  tuzağı) zaten ilgili dosyaların başlığında yazıyor. PLAN.md tarihsel
+  kayıt olarak olduğu gibi duruyor.
+
+<!-- Proje fazları bitti. Yayın: metadata.json'daki version 1'de bırakıldı. -->

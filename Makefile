@@ -7,9 +7,12 @@ UUID    := claude-pet@eymistaken.local
 SRC     := src
 ASSETS  := assets
 BUILD   := build
+STAGE   := $(BUILD)/stage
 EXT_DIR := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
+# Hook'larin olay biraktigi yer; tracker.js ayni yolu hesapliyor.
+STATE_DIR := $(HOME)/.local/state/claude-pet
 
-.PHONY: help schemas install uninstall enable disable \
+.PHONY: help schemas install uninstall enable disable check gif \
         nested nested-kill nested-clean nested-log preview logs pack prefs \
         hooks unhooks hooks-status replay replay-canli
 
@@ -27,8 +30,10 @@ help:
 	@echo "  make nested-kill   test oturumunu ve yetim servisleri kapat"
 	@echo "  make nested-clean  yalnizca yetim servisleri topla"
 	@echo "  make preview       kareleri bagimsiz pencerede ciz (kabuga dokunmaz)"
+	@echo "  make gif           README'deki docs/pet.gif'i yeniden uret"
 	@echo "  make replay        hook/durum/klip/konum mantigini izole olarak sina"
 	@echo "  make replay-canli  CANLI pet'i senaryoyla sur (tur|izin|ratelimit)"
+	@echo "  make check         paket kontrolu (metadata, varlik, sema, sozdizimi)"
 	@echo
 	@echo "  make hooks         Claude Code hook'larini ~/.claude/settings.json'a ekle"
 	@echo "  make unhooks       yalnizca claude-pet girdilerini geri al"
@@ -50,12 +55,26 @@ install: schemas
 	mkdir -p $(EXT_DIR)
 	cp -r $(SRC)/. $(EXT_DIR)/
 	cp -r $(ASSETS) $(EXT_DIR)/
+# Poz atolyesinden kalan elle alinmis yedekler kuruluma girmesin (~300 KB,
+# eklenti yalnizca animations.json okuyor).
+	rm -f $(EXT_DIR)/assets/animations.yedek*.json
 	@echo "kuruldu: $(EXT_DIR)"
 	@echo "NOT: kurmak etkinlestirmek DEGIL. Test icin 'make nested'."
 
+# Kaldirmak UC yer birakiyor: eklenti dizini, ~/.claude/settings.json'daki
+# hook girdileri ve olay kutusu. Ucu de burada gidiyor.
+#
+# GSettings anahtarlari BILEREK kaliyor: onlar kullanicinin tercihi (konum,
+# boyut), yeniden kurunca pet ayni yerde aciliyor. Silmek isteyen icin komut
+# asagida yaziliyor.
 uninstall:
 	rm -rf $(EXT_DIR)
 	@echo "silindi: $(EXT_DIR)"
+	-@python3 hooks/claude-pet-hook.py uninstall
+	rm -rf $(STATE_DIR)
+	@echo "silindi: $(STATE_DIR)"
+	@echo "ayarlar duruyor. Onlari da silmek icin:"
+	@echo "  dconf reset -f /org/gnome/shell/extensions/claude-pet/"
 
 # Bu iki hedef GERCEK masaustunu etkiler. Yeni kod once `make nested` ile
 # denenmeli: bozuk bir eklenti Wayland'de butun oturumu dusurebilir.
@@ -91,6 +110,12 @@ nested-log:
 preview:
 	gjs -m tools/preview.js
 
+# Belgelerdeki GIF. Ekran KAYDI DEGIL: kareler dogrudan sprite.js ile
+# ciziliyor, yani imlec/duvar kagidi/pencere kenari yok ve goruntu kabugun
+# cizdiginin aynisi. GIF'i Cairo yazamadigi icin dizme isi PIL'de.
+gif:
+	python3 tools/gif.py
+
 # Hook -> dosya -> FileMonitor -> durum zincirinin tamami, GECICI bir durum
 # dizininde. Gercek inbox'a ve gercek oturuma dokunmuyor. Ilk is olarak bir
 # kanarya kuruyor: inotify limiti doluysa FileMonitor SESSIZCE calismiyor ve
@@ -101,6 +126,12 @@ replay:
 	gjs -m tests/director.js
 	@echo
 	gjs -m tests/layout.js
+
+# Paket kontrolu: "baska bir makinede kurulur mu". Metadata/UUID tutarliligi,
+# varlik dosyasinin bicimi, semanin --strict gecmesi, JS ve Python
+# sozdizimi. Ayrintilar tools/kontrol.py basliginda.
+check:
+	@python3 tools/kontrol.py
 
 # ------------------------------------------------------------------ hook'lar
 #
@@ -129,13 +160,25 @@ logs:
 
 # --------------------------------------------------------------------- paketleme
 
-pack: schemas
-	mkdir -p $(BUILD)
+pack: check schemas
+	rm -rf $(STAGE)
+	mkdir -p $(STAGE)
+# Varliklar once bir sahne dizinine kopyalanip yedekler ATILIYOR; dogrudan
+# assets/ verilseydi poz atolyesinden kalan yedekler de pakete girerdi.
+	cp -r $(ASSETS) $(STAGE)/
+	rm -f $(STAGE)/assets/animations.yedek*.json
 # `gnome-extensions pack` yalnizca BILDIGI dosyalari aliyor (metadata.json,
 # extension.js, prefs.js, stylesheet.css, schemas/, locale/). lib/ ve assets/
 # ACIKCA verilmezse pakete GIRMIYOR ve zip sessizce bozuk cikiyor --
 # kurulunca eklenti "Unknown module: ./lib/sprite.js" ile olur.
 	gnome-extensions pack $(SRC) --force --out-dir=$(BUILD) \
 	  --extra-source=$(CURDIR)/$(SRC)/lib \
-	  --extra-source=$(CURDIR)/$(ASSETS)
+	  --extra-source=$(CURDIR)/$(STAGE)/assets
+# DERLENMIS SEMA elle ekleniyor. `gnome-extensions pack` yalnizca .gschema.xml
+# koyuyor (olculdu: zip listesinde gschemas.compiled yok), oysa
+# `getSettings()` -> `SettingsSchemaSource.new_from_directory()` derlenmis
+# dosyayi ariyor. Zip'ten kuran biri icin bu, eklentinin acilmamasi demek.
+	cd $(SRC) && zip -q $(CURDIR)/$(BUILD)/$(UUID).shell-extension.zip \
+	  schemas/gschemas.compiled
 	@echo "paket: $(BUILD)/$(UUID).shell-extension.zip"
+	@unzip -l $(BUILD)/$(UUID).shell-extension.zip | tail -n +4 | head -n -2
