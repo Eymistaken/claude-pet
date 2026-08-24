@@ -10,6 +10,10 @@
  *
  * Bu dosya da kabuğa bağımlı değil (yalnızca GLib) — önizleyici aynı
  * zamanlamayı kullanıyor, yani ritim iki yerde ayrı ayrı yazılmıyor.
+ *
+ * TUR BİLDİRİMİ (Faz 4): bir klip tam bir turu bitirdiğinde `onCycle`
+ * çağrılıyor. Yönetmen animasyonu ortasından kesmemek için buna bakıyor —
+ * durum değişse bile çalan klip turunu tamamlıyor.
  */
 
 import GLib from 'gi://GLib';
@@ -20,10 +24,13 @@ export class Player {
     /**
      * @param {object} animations `loadAnimations().animations`
      * @param {Function} onFrame kare değişince çağrılır (yeniden çizim tetiği)
+     * @param {Function} onCycle klip bir TURU tamamlayınca çağrılır — yönetmen
+     *   animasyonu ortasından kesmemek için buna bakıyor (Faz 4)
      */
-    constructor(animations, onFrame) {
+    constructor(animations, onFrame, onCycle) {
         this._animations = animations ?? {};
         this._onFrame = onFrame ?? (() => {});
+        this._onCycle = onCycle ?? (() => {});
         this._anim = null;
         this._index = 0;
         this._loop = false;
@@ -91,19 +98,37 @@ export class Player {
         if (!anim)
             return;
 
-        // Tek kare: gösterilecek başka bir şey yok, zamanlayıcı kurma.
-        if (anim.frames.length <= 1)
-            return;
+        const sonKare = this._index >= anim.frames.length - 1;
 
-        // Döngü değil ve son karedeyiz: burada kal, zamanlayıcı kurma.
-        if (!this._loop && this._index >= anim.frames.length - 1)
+        // TEK KARELİK DÖNGÜ (idle, waiting): gösterilecek başka kare yok ve
+        // bitiş de yok. Zamanlayıcı hiç kurulmuyor — "boştayken sıfır timer"
+        // kuralı. Tur bildirimi de olmuyor; çağıran `running === false`
+        // gördüğünde beklemeden geçebileceğini anlar.
+        if (sonKare && this._loop && anim.frames.length <= 1)
             return;
 
         const ms = Math.max(1, Math.round(1000 / anim.fps * anim.holds[this._index]));
 
         this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
             this._timeoutId = 0;
-            this._index = (this._index + 1) % anim.frames.length;
+
+            if (sonKare) {
+                // TUR BİTTİ. Son kare de kendi `hold` süresince duruyor —
+                // bildirim ancak o dolduktan sonra gidiyor, yoksa klibin son
+                // pozu hiç görünmeden kesilirdi.
+                if (this._loop) {
+                    this._index = 0;
+                    this._onFrame();
+                    this._schedule();
+                }
+                // Sıradaki klibe geçiş kararı yönetmenin; burada yalnızca
+                // haber veriliyor. Döngüde de haber gidiyor, çünkü "turu
+                // bitirmesini bekle" kuralı asıl orada işliyor.
+                this._onCycle(anim.name);
+                return GLib.SOURCE_REMOVE;
+            }
+
+            this._index++;
             this._onFrame();
             // Bir sonraki karenin süresi farklı olabilir; yeniden kur.
             this._schedule();

@@ -30,6 +30,7 @@ import {loadAnimations} from './lib/animations.js';
 import {drawLayer} from './lib/sprite.js';
 import {Player} from './lib/player.js';
 import {Tracker} from './lib/tracker.js';
+import {Director} from './lib/director.js';
 
 const LOG = '[claude-pet]';
 
@@ -38,10 +39,6 @@ const BASE_CELL = 3;
 
 /** İlk yerleşimde monitör kenarına bırakılan boşluk. */
 const MARGIN = 24;
-
-/* Faz 1'de durum makinesi yok: tek animasyon döngüde oynuyor.
- * Faz 4'te `lib/states.js` bunu devralacak. */
-const GECICI_ANIMASYON = 'laptop_code';
 
 /** Tıklamayı alan katman. Sürükleme ve konum hesapları buna bakıyor. */
 const ANA_KATMAN = 'karakter';
@@ -82,6 +79,7 @@ export default class ClaudePetExtension extends Extension {
         // Fazın merkezî iddiası ölçülebilir kalsın: kare sayısı yüzlerceyken
         // boyutlandırma sayısı animasyon değişimi kadar olmalı.
         this._tracker = null;
+        this._director = null;
         this._frameCount = 0;
         this._resizeCount = 0;
         // Katman gizlenip gösterilmesi dışarıdan görünmüyor (Wayland'de input
@@ -100,19 +98,31 @@ export default class ClaudePetExtension extends Extension {
 
             this._buildActors();
 
-            this._player = new Player(this._sheet.animations, () => this._onFrame());
-            this._startAnimation();
+            // Zincir: tracker (ne oluyor) → director (ne oynayacak) →
+            // player (ne zaman) → sprite (nasıl çizilecek).
+            this._player = new Player(this._sheet.animations,
+                () => this._onFrame(),
+                ad => this._director?.onCycle(ad));
+
+            this._director = new Director({
+                animations: this._sheet.animations,
+                // Klip değişimi actor'leri de yeniden boyutlandırıyor (Faz 2),
+                // o yüzden yönetmen player'a doğrudan değil buradan geçiyor.
+                play: (ad, secenekler) => this._playAnimation(ad, secenekler),
+                isRunning: () => this._player?.running ?? false,
+            });
+            this._director.start();
 
             // Konum animasyondan SONRA: varsayılan yerleşim karakter kutusunun
             // boyutunu biliyor olmalı.
             this._restorePosition();
             this._makeDraggable();
 
-            // Durum takibi (Faz 3). Pet HENÜZ TEPKİ VERMİYOR: eşleme Faz 4'ün
-            // işi, burada yalnızca doğru durumun bilindiği görülüyor.
             this._tracker = new Tracker();
-            this._connect(this._tracker, 'changed', (_t, durum, rateLimited) =>
-                console.log(`${LOG} durum: ${durum}${rateLimited ? ' · rate limit' : ''}`));
+            this._connect(this._tracker, 'changed', (_t, durum, rateLimited) => {
+                console.log(`${LOG} durum: ${durum}${rateLimited ? ' · rate limit' : ''}`);
+                this._director?.setState(durum, rateLimited);
+            });
             this._tracker.start();
 
             console.log(`${LOG} etkin · ızgara (${this._originX}, ${this._originY}) · ` +
@@ -130,6 +140,9 @@ export default class ClaudePetExtension extends Extension {
             // uyanan bir kare geri çağrısı ölü bir aktöre uzanır.
             this._player?.stop();
             this._player = null;
+
+            this._director?.stop();
+            this._director = null;
 
             // Dosya izleyicisi de zamanlayıcı gibi: aktörlerden önce sökülsün.
             this._tracker?.stop();
@@ -233,32 +246,24 @@ export default class ClaudePetExtension extends Extension {
         }
     }
 
-    _startAnimation() {
-        // Faz 1 geçici davranışı: tek klip döngüde. Varlık dosyasında
-        // `loop: false` yazıyor çünkü Faz 4'te üçe bölünecek; burada
-        // döngü bilerek zorlanıyor.
-        if (!this._playAnimation(GECICI_ANIMASYON, {loop: true})) {
-            // O animasyon yoksa (bozuk varlık) eldeki ilk animasyona düş.
-            const ilk = Object.keys(this._sheet.animations)[0];
-            if (ilk)
-                this._playAnimation(ilk, {loop: true});
-        }
-    }
-
     /** Animasyonu oynat ve tuvalleri onun birleşim kutularına göre boyutla. */
     _playAnimation(name, options) {
         const anim = this._sheet.animations[name];
-        if (!anim || !this._player.play(name, options))
+        if (!anim)
             return false;
 
-        // Zaten o animasyon oynuyorsa `play()` işlem yapmadan true dönüyor;
-        // kutular da değişmemiş oluyor, boşuna boyutlandırma yok.
+        // Kutular oynatmadan ÖNCE geçiyor. `play()` ilk kareyi hemen bildiriyor
+        // ve o bildirim katman görünürlüğünü kutulara bakarak hesaplıyor —
+        // eski kutularla hesaplanırsa yeni klibin ilk karesinde laptop bir
+        // kare boyunca yanlış görünürlükte kalır.
+        // Zaten o animasyon oynuyorsa kutular da aynı: boşuna boyutlandırma yok.
         if (this._boxes !== anim.boxes) {
             this._boxes = anim.boxes;
-            this._syncSize();
+            this._syncSize(name);
             this._syncPosition();
         }
-        return true;
+
+        return this._player.play(name, options);
     }
 
     // -------------------------------------------------------------- geometri
@@ -281,7 +286,7 @@ export default class ClaudePetExtension extends Extension {
      * Kabul edilebilir, çünkü kazanç zaten laptobu ve tuvalin boş kenarlarını
      * dışarıda bırakmaktan geliyor — karakter actor'ü tam tuvalin %33–55'i.
      */
-    _syncSize() {
+    _syncSize(klip) {
         const rapor = [];
         for (const [ad, area] of Object.entries(this._actors)) {
             const box = this._boxes?.[ad];
@@ -294,7 +299,7 @@ export default class ClaudePetExtension extends Extension {
         }
 
         this._resizeCount++;
-        console.log(`${LOG} tuval · ${this._player?.currentName} · ${rapor.join(' · ')}`);
+        console.log(`${LOG} tuval · ${klip} · ${rapor.join(' · ')}`);
     }
 
     /** Actor konumlarını ızgara başlangıcından türet. */

@@ -14,6 +14,9 @@ video_kaydı/
 kontrol*.png
 !docs/kontrol_laptop_code.png
 
+# poz atolyesinden cikan elle alinmis varlik yedekleri -- yerelde kalsin
+assets/animations.yedek*.json
+
 # python
 __pycache__/
 *.pyc

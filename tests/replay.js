@@ -13,7 +13,14 @@
  * izleyici kurulup gerçekten olay aldığı doğrulanıyor. Alamıyorsa test
  * başlamıyor ve ne yapılacağını söylüyor.
  *
- * Kullanım:  gjs -m tests/replay.js     (ya da `make replay`)
+ * İKİ KİP:
+ *   (varsayılan)  izole test — geçici dizin, doğrulama, 21 madde
+ *   --canli       GERÇEK inbox'a yazar, yani ÇALIŞAN pet'i sürer. Doğrulama
+ *                 yok; amaç ekrana bakıp koreografiyi görmek. Senaryolar:
+ *                 `tur` (varsayılan), `izin`, `ratelimit`.
+ *
+ * Kullanım:  gjs -m tests/replay.js              (ya da `make replay`)
+ *            gjs -m tests/replay.js --canli izin (ya da `make replay-canli`)
  */
 
 import Gio from 'gi://Gio';
@@ -32,6 +39,82 @@ function kok() {
 
 const KOK = kok();
 const HOOK = GLib.build_filenamev([KOK, 'hooks', 'claude-pet-hook.py']);
+
+/** Gerçek hook betiğini bir yükle çalıştır. Döner: geçen süre (ms). */
+function hookCalistir(yuk) {
+    const t0 = GLib.get_monotonic_time();
+    const surec = Gio.Subprocess.new(
+        ['python3', HOOK],
+        Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+    const [, , hata] = surec.communicate_utf8(JSON.stringify(yuk), null);
+    const ms = (GLib.get_monotonic_time() - t0) / 1000;
+    if (hata)
+        printerr(`hook stderr: ${hata}`);
+    return ms;
+}
+
+// --------------------------------------------------------------- canlı kip
+//
+// GERÇEK inbox'a yazıyor: çalışan pet bu olayları görüyor. Doğrulama yok,
+// çünkü ölçülecek şey ekranda — `make nested` açıkken çalıştırıp bak.
+
+const CANLI_SENARYOLAR = {
+    // Sıradan bir tur: istem, birkaç araç, bitiş.
+    tur: [
+        [0, {hook_event_name: 'UserPromptSubmit'}, 'istem geldi → laptop çıkmalı'],
+        [3000, {hook_event_name: 'PreToolUse', tool_name: 'Read'}, 'araç 1 — laptop ELDE KALMALI'],
+        [3000, {hook_event_name: 'PreToolUse', tool_name: 'Bash'}, 'araç 2 — hâlâ elde'],
+        [3000, {hook_event_name: 'PreToolUse', tool_name: 'Edit'}, 'araç 3 — hâlâ elde'],
+        [4000, {hook_event_name: 'Stop'}, 'tur bitti → laptop kalkmalı, düz duruş'],
+    ],
+    // İzin isteği: pet beklemeye geçer ve cevap gelene kadar öyle kalır.
+    izin: [
+        [0, {hook_event_name: 'UserPromptSubmit'}, 'istem geldi'],
+        [3000, {hook_event_name: 'PreToolUse', tool_name: 'Bash'}, 'araç çalışıyor'],
+        [3000, {hook_event_name: 'PermissionRequest'}, 'İZİN İSTENDİ → bekleme pozu'],
+        [12000, {hook_event_name: 'PreToolUse', tool_name: 'Bash'}, 'cevap verildi → waiting_out, sonra yazmaya dönüş'],
+        [5000, {hook_event_name: 'Stop'}, 'bitti'],
+    ],
+    // Rate limit: laptop ANİDEN kaybolmalı, geçiş animasyonu OYNAMAMALI.
+    ratelimit: [
+        [0, {hook_event_name: 'UserPromptSubmit'}, 'istem geldi'],
+        [3000, {hook_event_name: 'PreToolUse', tool_name: 'Bash'}, 'araç çalışıyor'],
+        [4000, {hook_event_name: 'StopFailure', error_type: 'rate_limit'}, 'RATE LIMIT → laptop ANİDEN kaybolmalı'],
+    ],
+};
+
+if (ARGV.includes('--canli')) {
+    const ad = ARGV.find(a => !a.startsWith('--')) ?? 'tur';
+    const adimlar = CANLI_SENARYOLAR[ad];
+    if (!adimlar) {
+        printerr(`bilinmeyen senaryo: ${ad}  (${Object.keys(CANLI_SENARYOLAR).join(' | ')})`);
+        imports.system.exit(2);
+    }
+
+    print(`CANLI KİP — senaryo: ${ad}`);
+    print('GERÇEK inbox\'a yazılıyor; çalışan pet bunu görecek. Ekrana bak.');
+    print('');
+
+    const dongu = new GLib.MainLoop(null, false);
+    let i = 0;
+    const sonraki = () => {
+        if (i >= adimlar.length) {
+            print('\nsenaryo bitti');
+            dongu.quit();
+            return;
+        }
+        const [gecikme, yuk, aciklama] = adimlar[i++];
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, gecikme, () => {
+            hookCalistir(yuk);
+            print(`  ${yuk.hook_event_name.padEnd(18)} ${aciklama}`);
+            sonraki();
+            return GLib.SOURCE_REMOVE;
+        });
+    };
+    sonraki();
+    dongu.run();
+    imports.system.exit(0);
+}
 
 // Izole durum dizini. Tracker ve hook betiği AYNI değişkene bakıyor, yani
 // tek satır ikisini birden taşıyor.
@@ -109,19 +192,6 @@ function kanarya() {
 }
 
 // ----------------------------------------------------------------- hook sürme
-
-/** Gerçek hook betiğini bir yükle çalıştır. Döner: geçen süre (ms). */
-function hookCalistir(yuk) {
-    const t0 = GLib.get_monotonic_time();
-    const surec = Gio.Subprocess.new(
-        ['python3', HOOK],
-        Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
-    const [, , hata] = surec.communicate_utf8(JSON.stringify(yuk), null);
-    const ms = (GLib.get_monotonic_time() - t0) / 1000;
-    if (hata)
-        printerr(`hook stderr: ${hata}`);
-    return ms;
-}
 
 /** Olayı yaz, izleyicinin yakalamasını bekle, sonra kontrolü çalıştır. */
 function adimlariSur(izleyici, adimlar, bitince) {

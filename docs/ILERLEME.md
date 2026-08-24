@@ -404,4 +404,127 @@ Notlar / bilinen eksikler
   özet satırlarının güncelliğini yitirdiğini, prompt dosyalarının esas
   olduğunu söyledi.
 
-<!-- Sıradaki: Faz 4 — prompts/faz-4-animasyon-eslemesi.md -->
+## Faz 4 — Durum → animasyon eşlemesi            2026-08-24
+
+Pet hayata döndü. `tracker` ne olduğunu söylüyor, `states.js` hangi kliplerin
+oynayacağını, `director.js` sırayı ve zamanlamayı kuruyor.
+
+Yapılanlar
+- **`src/lib/states.js`** — üç tablo, tek satırlık bir kural:
+  `dizi(A → B) = ÇIKIS[A] + GIRIS[B] + DONGU[B]`. `STATE_ANIM` prompt'taki
+  hâliyle duruyor; yanına `ENTER_ANIM` (WORKING: `laptop_out`, WAITING:
+  `waiting_in`) ve `EXIT_ANIM` (WORKING: `laptop_away`, WAITING:
+  `waiting_out`) eklendi. `resolve()` eksik klipte `idle`'a düşüyor ve
+  klip başına BİR KEZ `console.debug` basıyor.
+- **`src/lib/director.js`** — `tracker.changed` → klip dizisi. Dizinin son
+  klibi döngüde döner, öncekiler bir kez oynar; `loop` bayrağı varlıktan
+  değil dizideki sıradan geliyor.
+- **`src/lib/player.js`** — `onCycle` geri çağrısı eklendi: bir klip tam bir
+  turu bitirince haber veriyor. Ayrıca döngü olmayan klibin **son karesi
+  artık kendi `hold` süresince duruyor** (önceden son karede zamanlayıcı hiç
+  kurulmuyordu, yani klibin bitiş pozu görünmeden kesiliyordu).
+- **`src/extension.js`** — Faz 1'in `GECICI_ANIMASYON` sabiti ve döngü
+  zorlaması kaldırıldı; zincir `tracker → director → player → sprite`.
+- **`tests/director.js` + `make replay`** — koreografi testi (sahte player,
+  gerçek tablolar). **`make replay-canli SENARYO=tur|izin|ratelimit`** —
+  gerçek inbox'a yazıp ÇALIŞAN pet'i sürüyor; rate limit'i tetiklemenin yolu.
+
+Tasarım: neden `ÇIKIS + GIRIS + DONGU`
+
+Varlığın dikişleri ölçüldü ve tam olarak bu modeli istiyor
+(kare kare karşılaştırma, farklı hücre sayısı):
+
+| Dikiş | Fark |
+|---|---|
+| `laptop_away` son → `waiting_in` ilk | **aynı kare** |
+| `waiting_out` son → `laptop_out` ilk | **aynı kare** |
+| `laptop_away` son → `idle` ilk | **aynı kare** |
+| `waiting_out` son → `idle` ilk | **aynı kare** |
+| `idle` son → `laptop_out` / `waiting_in` ilk | **aynı kare** |
+| `typing` son → `waiting_in` ilk | **322 hücre** |
+
+Yani doğru sıra kurulunca geçişler görünmez oluyor; yanlış sıra göze batıyor.
+`typing`'den doğrudan `waiting_in`'e atlamak 322 hücre zıplatıyor — laptobun
+önce kalkması şart, ve bu koddaki bir `if` değil tablodaki bir satır.
+
+Prompt'tan sapmalar
+1. **Kural 3 ile kural 4 çelişiyordu.** Kural 3 "`WAITING`: devam eden
+   animasyonu kes" diyor, kural 4 "durum değişince klibi anında kesme, turunu
+   bitir — aynısı `waiting` için de geçerli, tek istisna rate limit". Kural 4
+   daha spesifik ve istisnayı açıkça sayıyor, o yüzden `WAITING` de turu
+   bekliyor. Ölçüldü: en uzun bekleme 1.51 sn.
+2. **"laptop varsa `laptop_away` oynat" koşulu tabloya çevrildi.** Laptop tam
+   olarak `WORKING`'den çıkarken elde oluyor, o yüzden `EXIT_ANIM.WORKING`
+   yeterli — ayrı bir "laptop var mı" bayrağı tutmaya gerek kalmadı.
+3. **Rate limit'te laptop actor'ü elle gizlenmiyor.** Gerek yok: `idle`
+   klibinde laptop katmanı hiç bulunmuyor, Faz 2'nin "katman boşsa actor'ü
+   gizle" yolu işi kendiliğinden yapıyor. Ölçüldü: `laptop_away` 0 kez oynadı.
+4. **`make replay-canli` eklendi.** Prompt "rate limit senaryosunu `make
+   replay` ile tetikle" diyor, ama `replay` bilerek izole bir dizinde
+   çalışıyor (gerçek oturuma dokunmasın diye). Canlı kip ayrı bir hedef.
+5. **`tests/director.js` eklendi** (istenmemişti). Koreografi tablo tabanlı
+   ve sessizce yanlış olabilir; 36 madde onu sabitliyor.
+
+Ölçümler
+- **Turu bekleme:** `typing` sürerken gelen 9 durum değişiminin hepsi turun
+  bitmesini bekledi — ortalama **0.60 sn**, en uzun **1.51 sn**. Bir `typing`
+  turu 1.73 sn, yani hiçbiri turu aşmadı. `IDLE`'dan gelen geçişler
+  (`idle` tek kare, zamanlayıcı yok) **0.001 sn**'de başlıyor.
+- **Rate limit:** `typing` → doğrudan `idle`, **0.000 sn**, arada klip yok.
+- **CPU (nested gnome-shell):** boşta **%0.18** ve **%0.10** (60'ar sn),
+  `typing` döngüsünde **%3.26**. `disable` sonrası %0.40 → temel seviye.
+- **Kapanış sayacı:** `kapatıldı · 530 kare · 7 kez boyutlandı · 4 kez katman
+  gizlendi/gösterildi` — boyutlandırma klip başına, kare başına değil.
+
+Doğrulama (gerçek Claude Code oturumu + canlı senaryolar)
+- [x] Claude Code kapalıyken pet düz duruyor  → açılışta
+      `tuval · idle · laptop: yok`
+- [x] Bir şey yaptır → laptop çıkıyor ve iş bitene kadar elinde kalıyor
+      → gerçek oturum (Read + Bash + Edit): tek `yönetmen: IDLE → WORKING ·
+      laptop_out → typing` satırı, üç aracın arasında **hiç klip değişimi
+      yok**, sonra tek `WORKING → IDLE`. Canlı `tur` senaryosunda da üç
+      `PreToolUse` sıfır klip değişimi üretti.
+- [x] İzin isteyen bir komut → laptop kalkıyor, bekleme pozuna geçiyor, cevap
+      verene kadar öyle  → `WORKING → WAITING · laptop_away → waiting_in →
+      waiting`; `waiting` tek kare olduğu için zamanlayıcı bile durmuş
+      hâlde bekliyor.
+- [x] Cevap ver → `waiting_out` bir kez, sonra yazmaya dönüyor
+      → `WAITING → WORKING · waiting_out → laptop_out → typing`
+- [x] Tur bitince laptop kalkıyor, düz duruşa dönüyor
+      → `WORKING → IDLE · laptop_away → idle`
+- [x] Yazma döngüsünün ortasında iş bitse bile animasyon yarıda kesilmiyor
+      → yukarıdaki 9 ölçüm; ortalama 0.60 sn beklendi
+- [x] Rate limit `make replay-canli SENARYO=ratelimit` ile tetiklendi →
+      `typing` → `idle`, `laptop_away` sayısı **0**, gecikme 0.000 sn
+- [x] Varlıkta olmayan bir klip → pet `idle`'a düşüyor, shell ayakta
+      → KURULU kopyadan `typing` çıkarıldı (depo varlığına dokunulmadı):
+      `laptop_out` oynadı, ardından `typing` yerine `idle`; kabuk ayakta,
+      hata yok. Sonra `make install` ile geri alındı.
+- [x] 3 dk boşta → CPU sıfır  → yukarıdaki ölçüm; `idle` tek kare olduğu için
+      zamanlayıcı hiç kurulmuyor
+- [x] Devre dışı bırakınca bütün zamanlayıcılar sökülüyor  → CPU %2.66 →
+      %0.40; `disable` sonrası inbox'a yazılan olay hiçbir klip değişimi
+      üretmedi
+- [x] Gözle bakıldı  → `typing` pozu ekran görüntüsüyle doğrulandı (pet öne
+      eğilmiş, gri laptop önünde), `waiting` pozu da ayrıca çekildi.
+
+Not / bilinen eksikler
+- **`waiting` pozu şu an düz bir dikdörtgen.** Varlıktaki `waiting` klibi
+  21×15 hücrelik, tamamen dolu bir kutu: göz, kol, bacak yok (kontrol edildi,
+  tek `#` bloğu). Prompt'un özet tablosu bu durumu "el sallar, yanında soru
+  işareti" diye tarif ediyor ve pet'in tek gerçek işlevi bu durumu haber
+  vermek. Ekranda 63×45 piksellik turuncu bir dikdörtgen olarak okunuyor.
+  Varlık kesinleşti dendiği için dokunulmadı; poz atölyesinde değiştirilmek
+  istenirse kodda hiçbir şey değişmesi gerekmiyor.
+- **Nadir yarış durumu.** Durum, bir geçiş klibi oynarken değişirse kalan dizi
+  bırakılıp yeniden planlanıyor; bu iki dikişte görünür bir sıçrama bırakıyor:
+  `laptop_out` son → `laptop_away` ilk (87 hücre) ve `waiting_in` son →
+  `waiting_out` ilk (12 hücre). Yalnızca 0.5–1.3 sn'lik geçiş klipleri
+  sırasında durum değişirse oluşuyor.
+- **Uyku kodu şu an ölü.** Varlıkta `sleep` klibi yok, o yüzden zamanlayıcı
+  hiç kurulmuyor ve pet `idle`'da kalıyor. Klip eklenirse kendiliğinden
+  devreye giriyor (birim testi sentetik bir `sleep` klibiyle doğruladı).
+  `sleep-timeout` hâlâ kurucu parametresi; GSettings anahtarı Faz 5.
+- `docs/PLAN.md`'ye yine dokunulmadı (kullanıcı isteği).
+
+<!-- Sıradaki: Faz 5 — prompts/faz-5-ayarlar.md -->

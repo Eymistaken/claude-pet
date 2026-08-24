@@ -11,7 +11,7 @@ EXT_DIR := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
 .PHONY: help schemas install uninstall enable disable \
         nested nested-kill nested-clean nested-log preview logs pack \
-        hooks unhooks hooks-status replay
+        hooks unhooks hooks-status replay replay-canli
 
 help:
 	@echo "claude-pet — hedefler"
@@ -26,7 +26,8 @@ help:
 	@echo "  make nested-kill   test oturumunu ve yetim servisleri kapat"
 	@echo "  make nested-clean  yalnizca yetim servisleri topla"
 	@echo "  make preview       kareleri bagimsiz pencerede ciz (kabuga dokunmaz)"
-	@echo "  make replay        hook -> durum zincirini izole bir dizinde sina"
+	@echo "  make replay        hook -> durum -> klip zincirini izole olarak sina"
+	@echo "  make replay-canli  CANLI pet'i senaryoyla sur (tur|izin|ratelimit)"
 	@echo
 	@echo "  make hooks         Claude Code hook'larini ~/.claude/settings.json'a ekle"
 	@echo "  make unhooks       yalnizca claude-pet girdilerini geri al"
@@ -90,12 +91,19 @@ preview:
 # bu mantik hatasi gibi gorunuyor.
 replay:
 	gjs -m tests/replay.js
+	@echo
+	gjs -m tests/director.js
 
 # ------------------------------------------------------------------ hook'lar
 #
 # GERCEK ~/.claude/settings.json'a dokunuyor. Betik once zaman damgali bir
 # yedek aliyor, elle yazilmis hook'lara dokunmuyor ve atomik yaziyor
 # (gecici dosya + rename), yani yarim yazilmis bir settings.json olamaz.
+
+# GERCEK inbox'a yaziyor, yani CALISAN pet'e. Izlemek icin: make nested
+# baska bir terminalde acikken bunu calistir.
+replay-canli:
+	gjs -m tests/replay.js --canli $(SENARYO)
 
 hooks:
 	python3 hooks/claude-pet-hook.py install
