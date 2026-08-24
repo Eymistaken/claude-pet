@@ -1,46 +1,109 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+---
+
 # claude-pet
 
-GNOME Shell 46 eklentisi. Claude Code'un durumunu masaüstünde bir maskotla
-gösterir.
+Claude Code'un durumunu masaüstünde bir maskotla gösterir. **İki sürümü var**
+ve ikisi de aynı depoda:
 
-Yol haritası: `docs/PLAN.md`. Her fazın hazır komutu: `prompts/faz-N-*.md`.
-Bir faza başlamadan önce o fazın prompt dosyasını ve PLAN.md'nin ilgili
-bölümünü oku.
+| | Nerede çalışır | Giriş noktası |
+|---|---|---|
+| GNOME Shell 46 eklentisi | GNOME · Wayland | `src/extension.js` |
+| Bağımsız uygulama / AppImage | KDE Plasma · Sway · Hyprland · COSMIC (Wayland) | `app/main.js` |
+
+Ayrım tek bir protokole dayanıyor: GNOME'un kompozitörü Mutter
+`wlr-layer-shell` desteklemiyor, KWin ve wlroots destekliyor.
 
 ## Ortam
 
-Zorin OS 18.1 (Ubuntu 24.04) · GNOME Shell 46.0 · **Wayland** · gjs 1.80.2
+Geliştirme makinesi: Zorin OS 18.1 (Ubuntu 24.04) · GNOME Shell 46.0 ·
+**Wayland** · gjs 1.80.2 · GTK 4.14.5
 
-Eklenti kimliği: `claude-pet@eymistaken.local`
-Şema: `org.gnome.shell.extensions.claude-pet`
+- Eklenti kimliği `claude-pet@eymistaken.local`, şeması
+  `org.gnome.shell.extensions.claude-pet` (dconf).
+- Uygulama kimliği `io.github.eymistaken.ClaudePet`, şeması aynı adda ama
+  **dconf değil keyfile** arka ucunda: `~/.config/claude-pet/ayarlar.conf`.
+  Anahtarlar ikisinde de birebir aynı.
 
 ## Mutlak kurallar
 
-1. **Bu kod gnome-shell process'inin İÇİNDE çalışır.** Yakalanmamış bir
-   exception ya da sonsuz döngü kullanıcının tüm masaüstünü düşürür. Dosya
-   okuma ve `JSON.parse` her zaman `try/catch` içinde. Bozuk veri pet'i
-   susturur, shell'i değil.
+1. **`src/extension.js` gnome-shell process'inin İÇİNDE çalışır.**
+   Yakalanmamış bir exception ya da sonsuz döngü kullanıcının tüm masaüstünü
+   düşürür. Dosya okuma ve `JSON.parse` her zaman `try/catch` içinde. Bozuk
+   veri pet'i susturur, shell'i değil.
 
-2. **`disable()` her şeyi söker.** Kurulan her `GLib.timeout_add`,
+2. **`src/lib/` KABUĞA BAĞIMLI OLAMAZ — bu artık iki tüketicisi olan bir
+   sözleşme.** Sekiz modülün hiçbirinde `St`, `Main`, `global`, `Meta`
+   geçmiyor; yalnızca GLib/Gio/GObject. Oraya kabuğa bağlı tek bir satır
+   eklemek AppImage sürümünü kırar. Kabuğa özgü kod `src/extension.js`e,
+   GTK'ya özgü kod `app/`e.
+
+3. **`disable()` her şeyi söker.** Kurulan her `GLib.timeout_add`,
    `connect()`, `Gio.FileMonitor` ve chrome actor `disable()` içinde
    kaldırılmalı ve referansı `null`'lanmalı. Kilit ekranı `disable()`/`enable()`
    çağırır; sızıntı orada hayalet actor olarak birikir.
 
-3. **Wayland'de gnome-shell yeniden başlatılamaz.** `Alt+F2` → `r` yok.
+4. **Wayland'de gnome-shell yeniden başlatılamaz.** `Alt+F2` → `r` yok.
    Test için `make nested`; asıl oturumu bozma.
 
-4. **Girdi geçirgenliği pazarlık konusu değil.** Karakterin dikdörtgeni dışında
-   hiçbir piksel tıklama yutmayacak. Görsel bir parça eklerken (laptop, gölge,
-   baloncuk) mutlaka ayrı bir actor olarak ve `affectsInputRegion: false`,
-   `reactive: false` ile ekle.
+5. **Girdi geçirgenliği pazarlık konusu değil.** Karakterin dikdörtgeni
+   dışında hiçbir piksel tıklama yutmayacak. İki sürümde iki ayrı mekanizma
+   — aşağıdaki "Girdi geçirgenliği" bölümüne bak; yeni bir görsel parça
+   eklerken ikisini de gözet.
 
-5. **Türkçe yaz.** Kod yorumları, commit mesajları ve açıklamalar Türkçe.
+6. **Türkçe yaz.** Kod yorumları, commit mesajları ve açıklamalar Türkçe.
    Değişken ve fonksiyon adları İngilizce kalsın.
 
-6. **Faz dışına çıkma.** Prompt dosyası hangi dosyalara dokunulacağını
-   söylüyor. Başka bir yerde iyileştirme fırsatı görürsen yap deme, not düş.
+## Komutlar
+
+```sh
+# --- doğrulama (her değişiklikten sonra) ---
+make check              # paket kontrolü: metadata, varlık biçimi, şema --strict,
+                        #   TÜM JS'in gjs Reflect.parse'ı, Python sözdizimi
+make replay             # dört test dosyası: 21 + 50 + 26 + 13 = 110 iddia
+gjs -m tests/director.js # TEK test dosyası (replay|director|layout|presence)
+
+# --- GNOME eklentisi ---
+make nested             # izole test oturumu (gerçek masaüstüne dokunmaz)
+make nested-log         # o oturumun logu        make nested-kill
+make install            # ~/.local/share/gnome-shell/extensions altına kur
+make enable / disable   # GERÇEK oturum          make prefs
+make logs               # gerçek oturumun gnome-shell logu
+make pack               # dağıtılabilir .shell-extension.zip
+
+# --- KDE / AppImage sürümü ---
+make appimage           # sudo'suz sysroot → gtk4-layer-shell → AppDir → AppImage
+make app-run            # AppImage'sız yerelde çalıştır (GNOME'da "desteklenmiyor"
+                        #   deyip 2 ile çıkar — beklenen davranış)
+make ikon               # simgeyi assets/animations.json'dan yeniden üret
+
+# --- sanat ve hook'lar ---
+make preview            # kareleri kabuğa dokunmadan bağımsız pencerede çiz
+make gif                # docs/pet.gif (Pillow ister)
+make hooks / unhooks / hooks-status
+make replay-canli SENARYO=tur|izin|ratelimit   # CANLI pet'i senaryoyla sür
+```
+
+İki test kancası — ikisi de gerçek ortama dokunmadan denemek için:
+
+```sh
+CLAUDE_PET_STATE_DIR=/tmp/pet-test   # hook'ların olay bıraktığı dizin
+CLAUDE_PET_PROCESSES=cpetsahte       # "Claude açık mı" ölçütünü değiştirir
+```
+
+İkincisi olmadan "pet gizlensin" hâlini denemek, deneyen kişinin kendi
+Claude'unu kapatmasını gerektirirdi. **`sleep` sahte Claude olarak
+KULLANILAMAZ** (sistemde her an başkasının `sleep`'i çalışıyor olabilir) ve ad
+15 karakteri geçemez (`comm` kırpılıyor) — ikisi de ölçülerek öğrenildi.
+
+Sanat üzerinde çalışırken `make preview`, `make nested` değil — çok daha hızlı.
 
 ## Mimari
+
+Zincir iki sürümde de aynı; değişen yalnızca son halka.
 
 ```
 Claude Code hook'ları
@@ -49,40 +112,43 @@ Claude Code hook'ları
 ~/.local/state/claude-pet/inbox/<ns>-<olay>.json
         │  Gio.FileMonitor — yoklama YOK
         ▼
-   lib/tracker.js      oturum başına durum → tek agregat durum
+   lib/tracker.js    oturum başına durum → tek agregat durum (son olay kazanır)
         ▼
-   lib/states.js       durum + tool_name → animasyon adı (TABLO, if zinciri değil)
+   lib/states.js     durum → klip DİZİSİ (TABLO, if zinciri değil):
+        │              dizi(A→B) = ÇIKIŞ[A] + GİRİŞ[B] + DÖNGÜ[B]
         ▼
-   lib/player.js       kare zamanlaması, hold süreleri
+   lib/director.js   hangi klip, ne zaman — animasyonu ORTASINDAN KESMEZ
         ▼
-   lib/sprite.js       Cairo ile kareyi çizer
-        ▲
-   assets/animations.json
+   lib/player.js     kare zamanlaması, `holds` süreleri, boştayken SIFIR timer
         ▼
-Main.layoutManager.addChrome(...)   karakter: input alır · laptop: almaz
+   lib/sprite.js     Cairo ile şerit şerit çizer        ← assets/animations.json
+        ▼
+  ┌─────────────────────────┴─────────────────────────┐
+  src/extension.js                              app/pencere.js
+  Main.layoutManager.addTopChrome(...)          wlr-layer-shell OVERLAY katmanı
+  karakter + laptop = İKİ actor                 TEK pencere + giriş bölgesi
 ```
 
-## İkinci sürüm: `app/` (KDE / AppImage)
+`lib/presence.js` bu zincirin dışında ve pet'in **var olma şartı**: `/proc`
+içinde `claude` ya da `claude-desktop` süreci var mı. Pencereye bakan bir
+yöntem terminalde açılan Claude Code'u kaçırırdı. Yoklama iki kademeli
+(açıkken tek dosya ~0.05 ms / 2 sn, kapalıyken tam tarama ~5.7 ms / 8 sn).
 
-Depoda maskotun iki sürümü var ve **ortak kısım `src/lib/`**:
+`lib/layout.js` konum aritmetiğinin tamamı: monitör seçimi, monitöre göreli
+kayıt, ekran içine sıkıştırma. Monitörleri düz `{x, y, width, height}` olarak
+alıyor — GNOME'da `Main.layoutManager.monitors`, GTK'da `app/ekran.js`.
 
-```
-src/lib/*.js · assets/animations.json · hooks/claude-pet-hook.py
-        │                                        │
-   src/extension.js                         app/main.js
-   GNOME · St + Clutter actor               KDE · GTK4 + wlr-layer-shell
-```
+### İki sürümdeki dört ölçülmüş fark
 
-`src/lib/` altındaki sekiz modülün hiçbiri `St`/`Main`/`global`/`Meta`
-görmüyor — yalnızca GLib/Gio/GObject. **Bu kural artık iki tüketicisi olan
-bir sözleşme:** oraya kabuğa bağlı bir satır eklemek AppImage sürümünü
-kırar. Kabuğa özgü kod `src/extension.js`e, GTK'ya özgü kod `app/`e.
+Bunlar bilinçli sapmalar, kopyalanmayı bekleyen tutarsızlıklar değil.
+Gerekçeleri `app/pencere.js` başlığında ve `docs/ILERLEME.md` Faz 7'de.
 
-`app/` içindeki dosyalar `src/lib`'i **kopyalamıyor**, `../src/lib/…` diye
-import ediyor. AppImage derlenirken ağaç olduğu gibi AppDir'e kopyalanıyor.
-
-Ayrıntı: `README-appimage.md`, `tools/appimage.sh` başlığı, `app/pencere.js`
-başlığı (iki sürüm arasındaki dört ölçülmüş fark orada yazılı).
+| | Eklenti (GNOME) | Uygulama (KDE) |
+|---|---|---|
+| **Girdi geçirgenliği** | `affectsInputRegion` Wayland'de HİÇBİR ŞEY yapmıyor; geçirgenliği sağlayan tek şey laptobun ayrı ve `reactive: false` bir actor olması | `Gdk.Surface.set_input_region()` gerçekten uygulanıyor; tek pencere, giriş bölgesi = karakter kutusu |
+| **Tam ekran** | `Meta.disable_unredirect_for_display()` şart, bedeli tam ekran oyunda birkaç fps | `overlay` katmanı protokol gereği üstte, bedel yok |
+| **Ölçek** | `cell = ayar × scale_factor` (St fiziksel piksele çiziyor) | `cell = ayar` (GTK4 mantıksal piksele çiziyor, ölçekleme GSK'nın işi) |
+| **Ayar deposu** | GSettings + dconf | GSettings + **keyfile** arka ucu, şema paketin içinden okunuyor |
 
 ## Animasyon varlıkları
 
@@ -104,33 +170,61 @@ Kareler kodda değil, `assets/animations.json` içinde:
   hepsini 1 varsayma.
 - **Yeni poz eklemek kod işi değil.** Poz atölyesinde çizilir, JSON dışa
   aktarılır, bu dosyanın üstüne yazılır. `docs/KAYIT.md`'ye bak.
+- Dosya değişince `make ikon` simgeyi de tazeler (simge varlıktan üretiliyor).
 
 ## Çizim
 
 - Kareyi hücre hücre çizme; her satırı **yatay şeritlere** böl (aynı karakterin
   ardışık dizisi) ve tek `cairo_rectangle` ile bas. 1961 çağrı yerine ~200.
-- Ölçek `St.ThemeContext.get_for_stage(global.stage).scale_factor` üzerinden.
+  Şeritlere ayırma YÜKLEME anında bir kez yapılıyor, her repaint'te değil.
+- Actor/pencere boyutu **kare başına değil ANIMASYON başına** değişiyor: kutu
+  o klibin bütün karelerinin birleşimi. Sıkı kutu neredeyse her karede
+  değişiyor (35 karelik `laptop_code`'da 7 ayrı kutu) ve 15 fps'de yeniden
+  boyutlandırmak görünür titreme demek.
+- GJS'de Cairo bağlamı elle `$dispose()` edilmezse **sızıyor**.
 - Göz açık renkli bir pencerenin üstünde kaybolmasın diye şeffaf değil, `o`
   rengiyle dolu çizilir.
 
-## Geliştirme döngüsü
+## AppImage paketleme
 
-```sh
-make nested     # iç içe test oturumu, asıl masaüstüne dokunmaz
-make logs       # journalctl -f -o cat /usr/bin/gnome-shell
-make preview    # kareleri shell'e hiç dokunmadan bağımsız pencerede çiz
-make install    # ~/.local/share/gnome-shell/extensions altına kur
-make pack       # dağıtılabilir .zip
-```
+`tools/appimage.sh` başlığında adım adım yazılı. Üç şey sürprizli:
 
-Sanat üzerinde çalışırken `make preview`, `make nested` değil — çok daha hızlı.
+1. **`gtk4-layer-shell` GJS'de `LD_PRELOAD` istiyor.** Kütüphane libwayland
+   çağrılarını shim'liyor ve `libwayland-client`'tan **önce** yüklenmek
+   zorunda. Python'daki `CDLL(...)` numarasının GJS'de karşılığı yok; tek yol
+   `AppRun` içindeki `LD_PRELOAD`. (`liblayer-shell-preload.so` başka bir şey.)
+2. **Derleme zinciri sudo'suz.** `sudo` parola istiyor ve `libgtk-4-dev` kurulu
+   değil; `tools/toolchain.sh` `apt-get download` + `dpkg-deb -x` ile
+   `build/toolchain/sysroot` kuruyor. `apt-cache depends --recurse`
+   KULLANILAMAZ — 473 paket / 257 MB indiriyor, iki seviye yetiyor.
+   `PKG_CONFIG_SYSROOT_DIR` `g-ir-scanner`ın yolunu da kaydırdığı için
+   sysroot'un `usr/bin`ine sembolik bağ gerekiyor.
+3. **Alt süreçlere temiz ortam.** Hook betiği konak `python3` ile çalışıyor;
+   `AppRun`'ın `LD_PRELOAD`/`LD_LIBRARY_PATH`i miras kalırsa konak python
+   paketlenmiş glib'i yüklemeye çalışır. `app/entegrasyon.js::temizOrtam()`.
+
+AppImage'ın bağlandığı dizin her açılışta değişiyor: dışarıya yazılan hiçbir
+yol oraya işaret edemez. Hook betiği `~/.local/share/claude-pet/` altına
+kopyalanıyor, autostart `Exec=` satırında `$APPIMAGE` kullanıyor.
 
 ## Doğrulama beklentisi
 
-Bir fazı bitirdim demeden önce:
+Bir işi bitirdim demeden önce:
 
-- `make nested` içinde eklentiyi etkinleştir, ekran görüntüsü al ve **bak**
-- Karakterin dışına tıklayıp altındaki pencerenin tıklandığını doğrula
-- Eklentiyi devre dışı bırak, `make logs` çıktısında hata/uyarı olmadığını
-  doğrula
-- Prompt dosyasındaki "Bitti sayılma koşulu" maddelerini tek tek işaretle
+- `make check` ve `make replay` → 110/110. `src/lib` değişmediyse bu, "iki
+  sürüm aynı mantığı çalıştırıyor" iddiasının kanıtı.
+- Eklentiye dokunulduysa: `make nested` içinde etkinleştir, **ekran görüntüsü
+  al ve bak**, karakterin dışına tıklayıp altındaki pencerenin tıklandığını
+  doğrula, `make logs`'ta hata/uyarı olmadığını gör.
+- Uygulamaya dokunulduysa: **bu makinede layer-shell konuşan bir kompozitör
+  yok**, yani pencere davranışı yerelde sınanamıyor. `make appimage` +
+  çalıştırıp "desteklenmiyor" hatasının geldiğini görmek gjs'in, 18
+  typelib'in ve altı ES modülünün yüklendiğini doğruluyor — davranışı değil.
+  KDE testi `README-appimage.md` sonundaki listeyle dışarıda yapılıyor.
+
+## Yol haritası
+
+Fazlar bitti (0–7). Ne yapıldığı ve **neden öyle yapıldığı**
+`docs/ILERLEME.md`'de faz faz yazılı — bir kararı değiştirmeden önce oraya
+bak, çoğu ölçümle gerekçeli. Kararların özeti `docs/PLAN.md`, faz komutları
+`prompts/`, tek komutla ilerleme akışı `UYGULA.md`.
