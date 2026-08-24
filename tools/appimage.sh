@@ -50,6 +50,10 @@ SR="$TC/sysroot"
 
 if [ ! -f "$LS_OUT/lib/libgtk4-layer-shell.so.0" ]; then
     adim "gtk4-layer-shell derleniyor"
+    # $TC'yi BURADA yaratiyoruz: toolchain.sh sistem zinciri yeterliyse (CI)
+    # hicbir sey yapmadan cikiyor ve dizin hic olusmuyor. Olculdu -- curl
+    # "diske yazamadi" (23) ile dustu.
+    mkdir -p "$TC"
     [ -d "$LS_SRC" ] || {
         curl -sL https://github.com/wmww/gtk4-layer-shell/archive/refs/tags/v1.3.0.tar.gz \
             -o "$TC/ls.tgz"
