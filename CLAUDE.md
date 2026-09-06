@@ -72,8 +72,8 @@ Eklenti kimliği: `claude-pet@eymistaken.local`
 # --- doğrulama (her değişiklikten sonra) ---
 make check              # paket kontrolü: metadata, varlık biçimi, şema --strict,
                         #   tüm JS'in gjs Reflect.parse'ı, Python sözdizimi
-make replay             # dört test dosyası: 21 + 50 + 26 + 13 = 110 iddia
-gjs -m tests/director.js # TEK test dosyası (replay|director|layout|presence)
+make replay             # beş test dosyası: 21 + 58 + 17 + 26 + 17 = 139 iddia
+gjs -m tests/director.js # TEK test dosyası (replay|director|player|layout|presence)
 
 # --- geliştirme döngüsü ---
 make nested             # izole test oturumu (gerçek masaüstüne dokunmaz)
@@ -184,7 +184,7 @@ Kareler kodda değil, `assets/animations.json` içinde:
 
 Bir işi bitirdim demeden önce:
 
-- `make check` ve `make replay` → 110/110.
+- `make check` ve `make replay` → 139/139.
 - `make nested` içinde eklentiyi etkinleştir, **ekran görüntüsü al ve bak**.
 - Karakterin dışına tıklayıp altındaki pencerenin tıklandığını doğrula.
 - Eklentiyi devre dışı bırak, `make logs` çıktısında hata/uyarı olmadığını

@@ -133,6 +133,8 @@ replay:
 	@echo
 	gjs -m tests/director.js
 	@echo
+	gjs -m tests/player.js
+	@echo
 	gjs -m tests/layout.js
 	@echo
 	gjs -m tests/presence.js

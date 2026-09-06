@@ -50,12 +50,14 @@ export class Director {
      * @param {Function} play (ad, {loop}) → bool · klibi oynatır, actor'leri
      *   o klibin birleşim kutularına göre boyutlar
      * @param {Function} isRunning zamanlayıcı kurulu mu (tur devam ediyor mu)
+     * @param {Function} isStalled klip yarıda mı kaldı (`watchdog` bunu soruyor)
      * @param {number} sleepTimeoutMs boşta uyku süresi
      */
-    constructor({animations, play, isRunning, sleepTimeoutMs} = {}) {
+    constructor({animations, play, isRunning, isStalled, sleepTimeoutMs} = {}) {
         this._animations = animations ?? {};
         this._play = play ?? (() => false);
         this._isRunning = isRunning ?? (() => false);
+        this._isStalled = isStalled ?? (() => false);
         this._sleepMs = sleepTimeoutMs ?? VARSAYILAN_UYKU_MS;
 
         // Pet'in şu an bulunduğu durum ve gitmek istediği durum. İkisi
@@ -148,6 +150,37 @@ export class Director {
             return;
         }
         this._next();
+    }
+
+    /** BEKÇİ — zincir koptuysa oynatmayı yeniden tetikle.
+     *
+     * NEDEN VAR. Bütün ilerleme `onCycle`e bağlı: player turu bitirir, yönetmen
+     * sıradakini başlatır. O bildirim bir kez düşerse pet o karede SONSUZA
+     * KADAR kalır — kendini toparlayacak hiçbir yol yok. Ölçüldü (5 Eylül,
+     * günlük): gnome-shell dakikada 75.000 "blocked GC callback" satırı
+     * yazarken pet `typing` klibinin ortasında dondu ve kabuk kendine gelince
+     * de orada kaldı. Sebep kabuktaydı, ama çaresizlik buradaydı.
+     *
+     * MALİYETİ SIFIR ZAMANLAYICI. Varlık yoklaması (2 sn/8 sn) zaten dönüyor;
+     * bekçi onun `tick`ine biniyor. Hiçbir şey ters gitmediyse bu bir no-op.
+     *
+     * `_held` iken hiç sorulmuyor: duraklatılmış, menüsü açık ya da claude'u
+     * kapalı bir pet KASITLI olarak duruyor, takılmış değil.
+     */
+    watchdog() {
+        if (this._held || !this._isStalled())
+            return;
+
+        console.warn(`${LOG} yönetmen: oynatıcı takıldı (${this._current}) · kurtarılıyor`);
+
+        // `_begin()` DEĞİL: o `sequence(X → X)` kurup çıkış ve giriş kliplerini
+        // boşuna oynatırdı (WORKING'de laptop_away → laptop_out → typing).
+        // Kalan sıra varsa oradan devam, yoksa bulunduğumuz durumun döngü
+        // klibine dön.
+        if (this._queue.length > 0)
+            this._next();
+        else
+            this._playClip(STATE_ANIM[this._current] ?? STATE_ANIM.IDLE, true);
     }
 
     // ------------------------------------------------------- duraklat / menü

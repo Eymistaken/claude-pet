@@ -55,8 +55,13 @@ export class Player {
 
         // Aynı animasyon zaten oynuyorsa baştan başlatma — durum makinesi
         // (Faz 4) aynı durumu üst üste gönderdiğinde animasyon zıplamasın.
-        if (this._anim === anim && this._timeoutId)
+        // DÖNGÜ BAYRAĞI YİNE DE YAZILIYOR: sıradaki yeri değişen bir klip
+        // (dizinin sonu mu değil mi) aynı klip olsa bile artık dönmeli ya da
+        // durmalı; erken dönüş bunu atlarsa klip yanlış bayrakla sürerdi.
+        if (this._anim === anim && this._timeoutId) {
+            this._loop = options.loop ?? anim.loop;
             return true;
+        }
 
         this._stopTimer();
         this._anim = anim;
@@ -103,9 +108,32 @@ export class Player {
         return this._index;
     }
 
+    /** Çalan klip dönüyor mu? Ölçüm/test için — bayrak varlıktan da,
+     *  `play()`in `options.loop`undan da gelebiliyor. */
+    get looping() {
+        return this._loop;
+    }
+
     /** Zamanlayıcı kurulu mu? Ölçüm/test için. */
     get running() {
         return this._timeoutId !== 0;
+    }
+
+    /** Klip yarıda kalmış mı? — bekçinin tek ölçütü.
+     *
+     * Çok kareli bir klip var, zamanlayıcısı yok ve bitmiş de değil. Bu üçlü
+     * normal işleyişte HİÇ oluşmuyor: tek karelik döngüler zaten zamanlayıcı
+     * kurmuyor (`_schedule` ilk koşul), biten döngüsüz klipler `_finished`
+     * ile işaretleniyor, `freeze()` ise `_anim`i koruyup `thaw()`u bekliyor.
+     * Geriye yalnızca zincirin gerçekten koptuğu hâl kalıyor — kabuk kilitlenip
+     * kare geri çağrısı düştüğünde olan da bu.
+     *
+     * `freeze()` ile donmuş bir klip de burada "takılmış" görünür; onu ayıran
+     * şey yönetmenin `_held` kontrolü (menü açıkken bekçi hiç sormuyor).
+     */
+    get stalled() {
+        return !!this._anim && this._anim.frames.length > 1 &&
+            this._timeoutId === 0 && !this._finished;
     }
 
     // ------------------------------------------------------------------- iç

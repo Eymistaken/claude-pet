@@ -106,6 +106,10 @@ export const Presence = GObject.registerClass({
     Signals: {
         /** (var mi, ad) -- yalnizca DEGISINCE yayiliyor. */
         'changed': {param_types: [GObject.TYPE_BOOLEAN, GObject.TYPE_STRING]},
+        /** HER yoklamada, durum degismese de. Zaten donen tek zamanlayiciya
+         *  binmek isteyenler icin: yonetmenin bekcisi bunu kullaniyor, boylece
+         *  periyodik bir is icin ikinci bir timer kurulmuyor. */
+        'tick': {},
     },
 }, class Presence extends GObject.Object {
     _init(options = {}) {
@@ -120,6 +124,10 @@ export const Presence = GObject.registerClass({
         this._pid = 0;          // bulunan surec: hizli yolun dayanagi
         this._name = '';
         this._timeoutId = 0;
+        // Yoklama istenip istenmedigi. Zamanlayicinin varligindan AYRI:
+        // geri cagri icinde `stop()` cagrilirsa tur sonundaki yeniden kurma
+        // buna bakip vazgeciyor.
+        this._running = false;
 
         // Olcum: kac kez tam tarama yapildi, kac kez hizli yol yetti.
         this._fullScans = 0;
@@ -141,6 +149,7 @@ export const Presence = GObject.registerClass({
     /** Ilk cevabi HEMEN verir (donus degeri), sonra yoklamaya baslar.
      *  Boylece Claude kapaliyken pet bir kare bile gorunmuyor. */
     start() {
+        this._running = true;
         this._present = this._check();
         this._arm();
         return this._present;
@@ -152,38 +161,66 @@ export const Presence = GObject.registerClass({
     }
 
     stop() {
+        this._running = false;
+        this._disarm();
+    }
+
+    /** Disaridan "simdi bak" demek icin: hook olayi geldiginde bir Claude
+     *  surecinin yeni dogmus olmasi cok muhtemel, yoklamayi bekleme.
+     *
+     * Yoklama kapaliyken (genel anahtar kapali) hicbir sey yapmiyor: kapali
+     * bir pet hicbir sey tuketmesin kurali burada da gecerli. */
+    poke() {
+        if (!this._running)
+            return;
+        this._tick();
+        // Siradaki tur bu andan itibaren sayilsin; az once zaten baktik.
+        this._arm();
+    }
+
+    // ------------------------------------------------------------------- ic
+
+    _disarm() {
         if (this._timeoutId) {
             GLib.Source.remove(this._timeoutId);
             this._timeoutId = 0;
         }
     }
 
-    /** Disaridan "simdi bak" demek icin: hook olayi geldiginde bir Claude
-     *  surecinin yeni dogmus olmasi cok muhtemel, yoklamayi bekleme. */
-    poke() {
-        this._tick();
-    }
-
-    // ------------------------------------------------------------------- ic
-
+    /* TEK ATIMLIK, HER TURDA YENIDEN KURULAN.
+     *
+     * Onceki hâli `SOURCE_CONTINUE` donduruyor ve aralik degisince `_tick()`in
+     * ICINDEN `_arm()` cagiriyordu -- yani O AN DISPATCH EDILEN kaynagi
+     * `GLib.Source.remove()` ile siliyordu. Calisiyordu, ama
+     * "Source ID N was not found when attempting to remove it" uyarisini
+     * ureten kalip tam olarak budur. Simdi geri cagri once kimligi birakiyor,
+     * sonra tur donuyor, en son yenisi kuruluyor: silinen kimlik hicbir zaman
+     * canli olan degil.
+     */
     _arm() {
-        this.stop();
+        this._disarm();
         this._timeoutId = GLib.timeout_add(GLib.PRIORITY_LOW, this._intervalMs, () => {
+            this._timeoutId = 0;
             this._tick();
-            return GLib.SOURCE_CONTINUE;
+            // `_tick()` icindeki bir dinleyici yoklamayi durdurmus olabilir.
+            if (this._running)
+                this._arm();
+            return GLib.SOURCE_REMOVE;
         });
     }
 
     _tick() {
         const yeni = this._check();
-        if (yeni === this._present)
-            return;
 
-        this._present = yeni;
-        console.log(`${LOG} claude ${yeni ? `açık · ${this._name} (pid ${this._pid})` : 'kapalı'}`);
-        // Durum degisti: aralik da degisti, zamanlayiciyi yeniden kur.
-        this._arm();
-        this.emit('changed', yeni, this._name);
+        if (yeni !== this._present) {
+            this._present = yeni;
+            console.log(`${LOG} claude ${yeni ? `açık · ${this._name} (pid ${this._pid})` : 'kapalı'}`);
+            // Aralik da degisti; yeni sure bir sonraki `_arm()`de gecerli olacak.
+            this.emit('changed', yeni, this._name);
+        }
+
+        // Durum degismese de yayiliyor: periyodik ise binmek isteyenler icin.
+        this.emit('tick');
     }
 
     /** Once onbellekteki pid, olmazsa tam tarama. */

@@ -86,6 +86,42 @@ ol('`comm` 15 karakter sınırına sığıyorlar',
     p.stop();
 }
 
+// --------------------------------------------------------- tick sinyali
+//
+// `changed` yalnızca DEĞİŞİNCE yayılıyor; yönetmenin bekçisi ise her yoklamada
+// sorulmak istiyor. `tick` o yüzden var — ve zaten dönen tek zamanlayıcıya
+// binmesi, periyodik bir iş için ikinci bir timer kurulmamasının tek sebebi.
+
+{
+    const p = new Presence({names: ['gjs'], intervalMs: 120});
+    let tik = 0;
+    let degisim = 0;
+    p.connect('tick', () => tik++);
+    p.connect('changed', () => degisim++);
+
+    p.start();
+    ol('start() tek başına tick yaymıyor', tik === 0, `${tik} tick`);
+
+    const dongu = new GLib.MainLoop(null, false);
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+        // 120 ms aralıkla 400 ms: en az iki tur dönmüş olmalı.
+        ol('her yoklamada tick geliyor', tik >= 2, `${tik} tick`);
+        // Süreç (bu gjs) hep açık kaldı: durum değişmedi.
+        ol('durum değişmeden de tick geliyor', degisim === 0, `${degisim} changed`);
+
+        p.stop();
+        const durdurulan = tik;
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+            ol('stop() sonrası tick kesiliyor', tik === durdurulan,
+                `${tik} tick (durdurulduğunda ${durdurulan})`);
+            dongu.quit();
+            return GLib.SOURCE_REMOVE;
+        });
+        return GLib.SOURCE_REMOVE;
+    });
+    dongu.run();
+}
+
 // --------------------------------------------- hızlı yol (pid önbelleği)
 
 {
