@@ -21,8 +21,8 @@ the repository instead. Mutter does not support `wlr-layer-shell`.
 
 ### ⚠️ Pre-release
 
-Verified at the code level — 110 unit assertions, the package check and a
-complete dependency closure, all run in CI — but **window behaviour has not
+Verified at the code level — 139 unit assertions, the package check and a
+complete dependency closure, all run in CI — but **window behavior has not
 been exercised in a real KWin session**: click-through, fullscreen, dragging,
 the right-click menu and monitor selection. Please open an issue either way.
 

@@ -227,7 +227,7 @@ The state → clip mapping is a table (`src/lib/states.js`), not a chain of
 sequence(A → B) = EXIT[A] + ENTER[B] + LOOP[B]
 ```
 
-Two behavioural rules: typing mode is **sticky** (an intervening Read/Bash
+Two behavioral rules: typing mode is **sticky** (an intervening Read/Bash
 does not put the laptop away), and an animation is **never cut mid-clip** (it
 finishes the cycle it is in; the one exception is a rate limit).
 
@@ -380,7 +380,7 @@ happens in a nested session: `make nested`.
 - **A small jump is possible if the state changes during a transition clip**
   (a 0.5–1.3 s window). The remaining sequence is dropped and replanned.
 - **A left click does not pass through while the right-click menu is open**,
-  it closes the menu. That is GNOME's own menu behaviour (modal grab), not a
+  it closes the menu. That is GNOME's own menu behavior (modal grab), not a
   limitation of the extension.
 - **Untested on X11.**
 
@@ -410,7 +410,7 @@ make pack        # distributable .zip
 make gif         # regenerate docs/pet.gif
 ```
 
-`make replay` runs four test files (110 assertions). To run one:
+`make replay` runs five test files (139 assertions). To run one:
 `gjs -m tests/director.js`.
 
 When working on the art use `make preview`, not `make nested` — it is much

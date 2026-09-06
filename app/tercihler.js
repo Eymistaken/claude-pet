@@ -122,7 +122,7 @@ class TercihlerPenceresi extends Adw.PreferencesWindow {
 
     _davranisGrubu() {
         const grup = new Adw.PreferencesGroup({
-            title: 'Behaviour',
+            title: 'Behavior',
             description: 'What the pet reacts to, and when.',
         });
 

@@ -108,7 +108,7 @@ export default class ClaudePetPreferences extends ExtensionPreferences {
         // ----------------------------------------------------------- davranış
 
         const davranis = new Adw.PreferencesGroup({
-            title: 'Behaviour',
+            title: 'Behavior',
             description: 'What the pet reacts to, and when.',
         });
 

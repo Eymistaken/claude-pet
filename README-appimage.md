@@ -163,8 +163,8 @@ Nothing is written outside `build/`.
 
 ## Status
 
-**Window behaviour has not been tested on KDE yet.** This build was verified
-at the code level — 110 unit assertions, the package check, a complete
+**Window behavior has not been tested on KDE yet.** This build was verified
+at the code level — 139 unit assertions, the package check, a complete
 dependency closure — and it was confirmed to exit cleanly with "not
 supported" on GNOME. But click-through, fullscreen, dragging and the
 right-click menu have not been exercised in a real KWin session:
