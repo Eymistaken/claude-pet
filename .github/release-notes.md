@@ -7,7 +7,7 @@ chmod +x Claude_Pet-x86_64.AppImage && ./Claude_Pet-x86_64.AppImage
 
 Running the AppImage a second time opens the settings — it does not start a
 second pet. Install, settings, uninstall and troubleshooting:
-**[README-appimage.md](https://github.com/Eymistaken/claude-pet/blob/appimage/README-appimage.md)**
+**[README-appimage.md](https://github.com/Eymistaken/claude-pet/blob/master/README-appimage.md)**
 
 | | |
 |---|---|

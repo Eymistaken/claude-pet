@@ -8,7 +8,7 @@ Claude asks you something, and puts the laptop away when the job is done.
 
 There are **two builds** in this repository, and they share everything that
 matters — the same animation file, the same state machine, the same clip
-timing, the same eight modules under `src/lib/`. They differ only in how the
+timing, the same eight modules under `src/shared/`. They differ only in how the
 mascot gets onto the screen.
 
 | Your desktop | What to install | Read |
@@ -52,6 +52,22 @@ make install     # installs under ~/.local/share/gnome-shell/extensions
 make enable      # enables it in the real session
 make hooks       # writes Claude Code hooks into ~/.claude/settings.json
 ```
+
+### From a release zip
+
+If you would rather not clone, every version is published as a
+`.shell-extension.zip` on the
+[releases page](https://github.com/Eymistaken/claude-pet/releases) — the ones
+tagged `ext-v*` (`v*` is the AppImage build; both come from this repository
+and share a version number):
+
+```sh
+gnome-extensions install --force claude-pet@eymistaken.local.shell-extension.zip
+gnome-extensions enable claude-pet@eymistaken.local
+```
+
+Then log out and back in, and run `make hooks` from a clone to wire up the
+Claude Code hooks — the pet hears nothing without them.
 
 `make hooks` leaves hooks you wrote by hand alone: it only adds its own
 entries (the ones with `claude-pet-hook.py` on the command line), takes a
@@ -220,7 +236,7 @@ means "working".**
 
 ¹ only the `permission_prompt`, `idle_prompt` and `agent_needs_input` types.
 
-The state → clip mapping is a table (`src/lib/states.js`), not a chain of
+The state → clip mapping is a table (`src/shared/states.js`), not a chain of
 `if`s:
 
 ```

@@ -101,7 +101,7 @@ session chooser.
 
 The same: animations (`assets/animations.json` is literally the same file),
 the state machine, clip timing, position arithmetic — all of it comes from the
-**same eight files** under `src/lib/`, not copies of them.
+**same eight files** under `src/shared/`, not copies of them.
 
 Different:
 

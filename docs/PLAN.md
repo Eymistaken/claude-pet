@@ -145,7 +145,7 @@ Faz sırasında görülen ama o fazın kapsamına girmediği için yapılmayan i
   kalsın (X11'de ve ileride işe yarar), ama ona güvenilmesin.
 - **`Clutter.DragAction` GNOME 46'da yok.** Sürükleme `global.stage.grab()` +
   el ile olay takibiyle yapılıyor. Yeni bir sürüklenebilir parça gerekirse
-  `src/extension.js` içindeki `_onPress`/`_onMotion`/`_endDrag` üçlüsü örnek.
+  `src/gnome/extension.js` içindeki `_onPress`/`_onMotion`/`_endDrag` üçlüsü örnek.
 - **Kabuğun içinden ölçüm modülü.** Pcbridge'in `selftest.js`'i gibi bir
   `lib/selftest.js`: `get_actor_at_pos(PickMode.REACTIVE, …)` ile hangi
   aktörün tıklanacağını, ana döngü gecikmesini ve animasyon ölçeğini kabuğun

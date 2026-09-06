@@ -3,6 +3,19 @@
 Her dosya, Claude Code'a olduğu gibi yapıştırılacak bir komut. Sırayla git,
 atlama.
 
+> **Yol adları eski düzeni anlatır.** Bu komutlar yazıldıklarında depo iki
+> dallıydı ve ağaç başkaydı; metinler tarihsel kayıt olarak **olduğu gibi
+> bırakıldı**. Bugünkü karşılıkları:
+>
+> | Komutlarda geçen | Bugün |
+> |---|---|
+> | `src/lib/` | `src/shared/` |
+> | `src/extension.js`, `src/prefs.js` | `src/gnome/` |
+> | `src/schemas/` | `src/gnome/schemas/` |
+> | `app/` | `src/plasma/` |
+>
+> Güncel ağaç `CLAUDE.md` → Depo düzeni bölümünde.
+
 | Dosya | Ne bitiriyor |
 |---|---|
 | `faz-0-iskelet.md` | Sürüklenebilir dikdörtgen + `make nested` geliştirme döngüsü |

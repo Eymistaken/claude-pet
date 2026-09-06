@@ -7,17 +7,30 @@
 # ancak derleyerek gorursun. Yayin ise bir KARAR, ve o karari VERSION dosyasi
 # veriyor: surumu artir, sonraki itmede surum cikar.
 #
-# ETIKET ONEKI: `v*` bu dalin (AppImage). Eklenti master'da `ext-v*`
-# kullaniyor, boylece iki dal ayni surum numarasindayken etiketler carpismiyor.
+# ETIKET ONEKI: `v*` AppImage build'inin. Eklenti `ext-v*` kullaniyor;
+# tek depo, tek VERSION, iki urun -- etiketler bu yuzden ayri onekli.
 
 name: AppImage
 
 on:
   push:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'prompts/**'
+    # Tek depoda iki urun var: bu is yalnizca AppImage'i ilgilendiren
+    # degisikliklerde kosuyor. `src/gnome/**` BILEREK yok -- eklentiye ozel
+    # bir degisiklik icin gtk4-layer-shell'i kaynaktan derlemek bosuna.
+    # `paths` ve `paths-ignore` ayni olayda birlikte kullanilamaz.
+    paths:
+      - 'src/shared/**'
+      - 'src/plasma/**'
+      - 'assets/**'
+      - 'hooks/**'
+      - 'tests/**'
+      - 'tools/appimage.sh'
+      - 'tools/toolchain.sh'
+      - 'tools/ikon.js'
+      - 'tools/kontrol.py'
+      - 'Makefile'
+      - 'VERSION'
+      - '.github/workflows/appimage.yml'
   workflow_dispatch:
 
 permissions:
@@ -85,6 +98,11 @@ jobs:
           test -f squashfs-root/usr/lib/libgtk4-layer-shell.so.0
           test -f squashfs-root/usr/lib/girepository-1.0/Gtk4LayerShell-1.0.typelib
           test -f squashfs-root/assets/animations.json
+          # Yeni agac: AppRun `src/plasma/main.js` calistiriyor ve o, ortak
+          # motoru `../shared`, varligi iki seviye yukaridan buluyor.
+          test -f squashfs-root/src/plasma/main.js
+          test -f squashfs-root/src/shared/sprite.js
+          test -f squashfs-root/hooks/claude-pet-hook.py
           # GTK4 simgelerinin cogu gresource icinde SVG. Yukleyici yoksa
           # ayarlar penceresindeki +/- dugmeleri ve acilir ok CIZILMEZ --
           # ldd bunu yakalamaz, cunku dlopen ediliyor.

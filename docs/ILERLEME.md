@@ -3,6 +3,21 @@
 Her faz bitince Claude Code buraya bir bölüm ekler. Bir sonraki oturum önce
 buraya bakıp nerede kalındığını anlar.
 
+> ## Yol adları: Faz 7 ve öncesi eski düzeni anlatır
+>
+> Bu dosya tarihli bir günlük — aşağıdaki bölümler yazıldıkları günkü ağacı
+> anlatıyor ve **bilerek olduğu gibi bırakıldı**. Depo 2026-09-06'da tek dala
+> ve üç kaynak ağacına taşındı; okurken şu eşlemeyi uygula:
+>
+> | Eski (Faz 0–7 metinlerinde) | Bugün |
+> |---|---|
+> | `src/lib/` | `src/shared/` |
+> | `src/extension.js`, `src/prefs.js` | `src/gnome/` |
+> | `src/schemas/` | `src/gnome/schemas/` |
+> | `app/` | `src/plasma/` |
+>
+> Ayrıntı: en alttaki "Tek depo" bölümü ve `CLAUDE.md` → Depo düzeni.
+
 Biçim:
 
 ```markdown
@@ -1257,3 +1272,61 @@ Notlar / bilinen eksikler
   çalışmada dakikada ~12 satır yazıyor (12:56:25–12:57:03 arasında 8 satır),
   kabuğun 75.000'i yanında sıfır. Buna karşılık bu teşhisi mümkün kılan iz tam
   da o satırlardı — kazancı yok, bedeli var.
+
+---
+
+## Tek depo — src/shared + src/gnome + src/plasma            2026-09-06
+
+Yapılanlar
+
+- **`appimage` dalı `master`'a birleştirildi; depo artık tek dal.** Ayrım
+  zaten yalandı: `src/`, `tests/`, `assets/`, `hooks/` ve `prompts/` iki dalda
+  byte-byte aynıydı ve elle senkron tutuluyordu — son iki commit (`donma
+  teşhisi`, `amerikan yazımı`) her iki dala ayrı ayrı yazılmış. Merge'de
+  yalnızca 6 dosya çatıştı; ikisi (Makefile, .gitignore) zaten üst kümeydi.
+- **Üç kaynak ağacı.** `src/shared/` (sekiz ortak modül), `src/gnome/`
+  (eklenti), `src/plasma/` (GTK4 uygulaması). Eski ağaçta `src/` hem ortak
+  motoru hem GNOME'a özel kodu tutuyordu; neyin paylaşıldığı dışarıdan
+  görünmüyordu.
+- `VERSION` 1.0.0/1.0.2 ayrımı kapandı → **1.1.0**. Etiket önekleri duruyor:
+  `v*` AppImage, `ext-v*` eklenti.
+- İki workflow `paths` filtresine geçti (`paths-ignore` ile birlikte
+  kullanılamıyor): yalnız `src/plasma/` değişince eklenti paketlenmiyor,
+  yalnız `src/gnome/` değişince gtk4-layer-shell boşuna derlenmiyor.
+- `master`'a kazara girmiş `app/data/gschemas.compiled` silindi (`3fda5e4`);
+  `.gitignore` yeni yollara taşındı.
+
+Doğrulama
+
+- [x] `make check` → 24 JS dosyası (öncesi 18), 22 göreli import, 0 uyarı
+- [x] `make replay` → 139/139, birleştirme öncesiyle aynı
+- [x] `make install` → `<ext>/shared/` sekiz modülle eklenti kökünde
+- [x] `make pack` → zip'te `shared/sprite.js`, `schemas/gschemas.compiled`,
+      `assets/animations.json` (CI'nin aradığı üçü)
+- [x] `make appimage` → AppDir'de `src/plasma` + `src/shared`, AppRun
+      `src/plasma/main.js` çağırıyor
+- [x] AppImage çalıştırıldı → GNOME'da beklenen "wlr-layer-shell yok"
+      mesajıyla 2 ile çıktı
+- [x] `KOK` çözümü **ölçüldü**: aynı `import.meta.url` mantığı hem depo hem
+      AppDir ağacında `assets/animations.json`, `hooks/claude-pet-hook.py` ve
+      `data/gschemas.compiled` dosyalarının üçünü de buluyor
+
+Notlar / bilinen eksikler
+
+- **Eklentideki yol asimetrisi bilinçli.** `src/gnome/extension.js`
+  `./shared/...` diyor ve bu depo ağacında çözülmez: gnome-shell bir eklentiyi
+  yalnızca kendi dizini altından import ettiriyor, o yüzden `make install` ve
+  `make pack` `src/shared`i `<ext>/shared`e düzleştiriyor. Eklenti hiçbir zaman
+  depodan çalıştırılmadığı için pratik bir sorun değil — ama görünmez bir
+  tuzak olduğu için `extension.js` başına yazıldı ve `make check`e kalıcı bir
+  kontrol eklendi.
+- **`tools/kontrol.py::import_kontrol()` eklendi.** Her iki yüzün göreli
+  import'larını KENDİ düzenine göre çözüyor (gnome kurulum düzeni, plasma depo
+  ağacı). `Reflect.parse` bunu göremiyordu — import hedeflerini hiç açmaz.
+  Bozuk yolla sınandı: iki yüzde de yakalıyor.
+- **`src/plasma/` artık sözdizimi kontrolüne giriyor.** Eski `app/` dizini
+  `kontrol.py`nin yürüyüş listesinde hiç yoktu; altı dosya kontrolsüzdü.
+- **KDE oturumunda hâlâ sınanmadı.** Pencere davranışı (tıklama geçirgenliği,
+  tam ekran, sürükleme) gerçek bir KWin oturumu görmedi; AppImage sürümleri ön
+  sürüm olarak yayınlanmaya devam ediyor.
+
