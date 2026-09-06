@@ -15,8 +15,8 @@
 
 import GLib from 'gi://GLib';
 
-import {Director} from '../src/lib/director.js';
-import {EXIT_ANIM, ENTER_ANIM, STATE_ANIM, sequence} from '../src/lib/states.js';
+import {Director} from '../src/shared/director.js';
+import {EXIT_ANIM, ENTER_ANIM, STATE_ANIM, sequence} from '../src/shared/states.js';
 
 let gecti = 0;
 let kaldi = 0;

@@ -4,7 +4,10 @@
 # Gelistirme dongusu icin `make nested` (gercek oturuma dokunmaz).
 
 UUID    := claude-pet@eymistaken.local
-SRC     := src
+# Tek depo, uc kaynak agaci: ortak motor + iki on yuz.
+SHARED  := src/shared
+GNOME   := src/gnome
+PLASMA  := src/plasma
 ASSETS  := assets
 BUILD   := build
 STAGE   := $(BUILD)/stage
@@ -43,7 +46,7 @@ help:
 	@echo "  make logs          GERCEK oturumun gnome-shell logu"
 	@echo "  make pack          dagitilabilir .zip uret"
 	@echo
-	@echo "  --- KDE / AppImage surumu (app/) ---"
+	@echo "  --- KDE / AppImage surumu (src/plasma/) ---"
 	@echo "  make app-run       uygulamayi YERELDE calistir (AppImage olmadan)"
 	@echo "  make appimage      tek dosyalik AppImage uret"
 	@echo "  make ikon          simgeyi varliktan yeniden uret"
@@ -51,7 +54,7 @@ help:
 # --------------------------------------------------------------------- kurulum
 
 schemas:
-	glib-compile-schemas $(SRC)/schemas/
+	glib-compile-schemas $(GNOME)/schemas/
 
 # assets/ bilerek src/ disinda duruyor: o bir VARLIK, kod degil (poz
 # atolyesinden dogrudan uzerine yaziliyor). Eklenti onu kendi dizininden
@@ -69,9 +72,13 @@ install: schemas
 # Poz atolyesinden kalan elle alinmis yedekler kuruluma girmesin (~300 KB,
 # eklenti yalnizca animations.json okuyor).
 	rm -f $(EXT_DIR)/assets/animations.yedek*.json
-	cp -r $(SRC)/lib $(SRC)/schemas $(EXT_DIR)/
-	cp $(SRC)/extension.js $(SRC)/prefs.js $(EXT_DIR)/
-	cp $(SRC)/metadata.json $(EXT_DIR)/
+# Ortak motor eklenti kokunun ALTINA duzlestiriliyor: bir eklenti yalnizca
+# kendi dizini altindan import edebiliyor, o yuzden src/shared -> <ext>/shared.
+# extension.js'teki `./shared/...` yollari ancak burada anlam kazaniyor.
+	cp -r $(SHARED) $(EXT_DIR)/shared
+	cp -r $(GNOME)/schemas $(EXT_DIR)/
+	cp $(GNOME)/extension.js $(GNOME)/prefs.js $(EXT_DIR)/
+	cp $(GNOME)/metadata.json $(EXT_DIR)/
 	@echo "kuruldu: $(EXT_DIR)"
 	@echo "NOT: kurmak etkinlestirmek DEGIL. Test icin 'make nested'."
 
@@ -186,31 +193,31 @@ pack: check schemas
 	cp -r $(ASSETS) $(STAGE)/
 	rm -f $(STAGE)/assets/animations.yedek*.json
 # `gnome-extensions pack` yalnizca BILDIGI dosyalari aliyor (metadata.json,
-# extension.js, prefs.js, stylesheet.css, schemas/, locale/). lib/ ve assets/
+# extension.js, prefs.js, stylesheet.css, schemas/, locale/). shared/ ve assets/
 # ACIKCA verilmezse pakete GIRMIYOR ve zip sessizce bozuk cikiyor --
-# kurulunca eklenti "Unknown module: ./lib/sprite.js" ile olur.
-	gnome-extensions pack $(SRC) --force --out-dir=$(BUILD) \
-	  --extra-source=$(CURDIR)/$(SRC)/lib \
+# kurulunca eklenti "Unknown module: ./shared/sprite.js" ile olur.
+	gnome-extensions pack $(GNOME) --force --out-dir=$(BUILD) \
+	  --extra-source=$(CURDIR)/$(SHARED) \
 	  --extra-source=$(CURDIR)/$(STAGE)/assets
 # DERLENMIS SEMA elle ekleniyor. `gnome-extensions pack` yalnizca .gschema.xml
 # koyuyor (olculdu: zip listesinde gschemas.compiled yok), oysa
 # `getSettings()` -> `SettingsSchemaSource.new_from_directory()` derlenmis
 # dosyayi ariyor. Zip'ten kuran biri icin bu, eklentinin acilmamasi demek.
-	cd $(SRC) && zip -q $(CURDIR)/$(BUILD)/$(UUID).shell-extension.zip \
+	cd $(GNOME) && zip -q $(CURDIR)/$(BUILD)/$(UUID).shell-extension.zip \
 	  schemas/gschemas.compiled
 	@echo "paket: $(BUILD)/$(UUID).shell-extension.zip"
 	@unzip -l $(BUILD)/$(UUID).shell-extension.zip | tail -n +4 | head -n -2
 
 # ------------------------------------------------------- KDE / AppImage surumu
 #
-# `app/` altindaki uygulama GNOME eklentisiyle AYNI `src/lib` dosyalarini
+# `src/plasma/` altindaki uygulama GNOME eklentisiyle AYNI `src/shared/`
 # kullaniyor; buradaki hedefler yalnizca onu calistirmak ve paketlemek icin.
 # Ayrinti: tools/appimage.sh basligi ve README-appimage.md.
 
 LS_OUT := $(BUILD)/toolchain/gtk4-layer-shell/_install/usr
 
 app: ikon
-	glib-compile-schemas app/data
+	glib-compile-schemas $(PLASMA)/data
 
 ikon:
 	gjs -m tools/ikon.js
@@ -220,7 +227,7 @@ ikon:
 # libwayland cagrilarini shim'liyor ve ondan once yuklenmek zorunda).
 app-run: app
 	@test -f $(LS_OUT)/lib/libgtk4-layer-shell.so.0 || 	  { echo "once 'make appimage' calistir (gtk4-layer-shell derlenmemis)"; exit 1; }
-	GI_TYPELIB_PATH=$(LS_OUT)/lib/girepository-1.0 	LD_LIBRARY_PATH=$(LS_OUT)/lib 	LD_PRELOAD=$(LS_OUT)/lib/libgtk4-layer-shell.so.0 	gjs -m app/main.js
+	GI_TYPELIB_PATH=$(LS_OUT)/lib/girepository-1.0 	LD_LIBRARY_PATH=$(LS_OUT)/lib 	LD_PRELOAD=$(LS_OUT)/lib/libgtk4-layer-shell.so.0 	gjs -m $(PLASMA)/main.js
 
 appimage:
 	@bash tools/appimage.sh

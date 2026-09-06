@@ -2,7 +2,7 @@
 /* Uygulama simgesi — varliktan uretiliyor, elle cizilmiyor.
  *
  * NEDEN: simge de maskotun kendisi olsun ve poz atolyesinde karakter
- * degistiginde simge de degissin. Cizim `src/lib/sprite.js`ten geliyor, yani
+ * degistiginde simge de degissin. Cizim `src/shared/sprite.js`ten geliyor, yani
  * simgedeki pet ekrandakiyle ayni.
  *
  * Kullanim: gjs -m tools/ikon.js [cikti.png] [boyut]
@@ -11,8 +11,8 @@
 import GLib from 'gi://GLib';
 import cairo from 'gi://cairo';
 
-import {loadAnimations} from '../src/lib/animations.js';
-import {drawLayer} from '../src/lib/sprite.js';
+import {loadAnimations} from '../src/shared/animations.js';
+import {drawLayer} from '../src/shared/sprite.js';
 
 function buradaki() {
     const [dosya] = GLib.filename_from_uri(import.meta.url);

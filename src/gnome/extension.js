@@ -36,13 +36,20 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-import {loadAnimations} from './lib/animations.js';
-import {drawLayer} from './lib/sprite.js';
-import {Player} from './lib/player.js';
-import {Tracker} from './lib/tracker.js';
-import {Director} from './lib/director.js';
-import {Presence} from './lib/presence.js';
-import * as Layout from './lib/layout.js';
+// `./shared/` DEPO AGACINDA COZULMEZ, bilerek: ortak modüller `src/shared/`
+// altinda duruyor, eklentinin kardesi degil. `make install` ve `make pack`
+// onlari eklenti kokunun ALTINA (`<ext>/shared/`) düzlestiriyor -- bir eklenti
+// yalnizca kendi dizini altindaki dosyalari import edebildigi icin baska bir
+// secenek yok. Eklenti hiçbir zaman depodan calistirilmiyor (once `make
+// install`), o yüzden bu yol yalnizca kurulmus agaçta anlamli.
+// `make check` bunu dogruluyor (tools/kontrol.py::import_kontrol).
+import {loadAnimations} from './shared/animations.js';
+import {drawLayer} from './shared/sprite.js';
+import {Player} from './shared/player.js';
+import {Tracker} from './shared/tracker.js';
+import {Director} from './shared/director.js';
+import {Presence} from './shared/presence.js';
+import * as Layout from './shared/layout.js';
 
 const LOG = '[claude-pet]';
 

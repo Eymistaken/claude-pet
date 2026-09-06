@@ -7,7 +7,7 @@
  *                                                    -> sprite (nasil)
  *
  * Bu dosya yalnizca zinciri kuruyor ve GTK tarafina bagliyor. Dort halkanin
- * DORDU DE `src/lib/` altindaki AYNI dosyalar — kopya degil, ayni dosya.
+ * DORDU DE `src/shared/` altindaki AYNI dosyalar — kopya degil, ayni dosya.
  * "Ayni mantik" iddiasinin dayanagi bu; `tests/` altindaki dort test de o
  * dosyalari sinadigi icin bu surum icin de gecerli.
  *
@@ -25,11 +25,11 @@ import GObject from 'gi://GObject';
 import LayerShell from 'gi://Gtk4LayerShell?version=1.0';
 import System from 'system';
 
-import {loadAnimations} from '../src/lib/animations.js';
-import {Player} from '../src/lib/player.js';
-import {Director} from '../src/lib/director.js';
-import {Tracker} from '../src/lib/tracker.js';
-import {Presence} from '../src/lib/presence.js';
+import {loadAnimations} from '../shared/animations.js';
+import {Player} from '../shared/player.js';
+import {Director} from '../shared/director.js';
+import {Tracker} from '../shared/tracker.js';
+import {Presence} from '../shared/presence.js';
 
 import {ayarlariKur, ayarlar, tamSayilariYaz} from './ayarlar.js';
 import {PetPenceresi} from './pencere.js';
@@ -40,14 +40,18 @@ const LOG = '[claude-pet]';
 const APP_ID = 'io.github.eymistaken.ClaudePet';
 
 /** Bu betigin bulundugu dizin; butun varlik yollari ondan tureniyor.
- *  Depoda da AppDir icinde de agac ayni: <kok>/app, <kok>/src, <kok>/assets. */
+ *  Depoda da AppDir icinde de agac ayni:
+ *  <kok>/src/plasma, <kok>/src/shared, <kok>/assets, <kok>/hooks. */
 function buradaki() {
     const [dosya] = GLib.filename_from_uri(import.meta.url);
     return GLib.path_get_dirname(dosya);
 }
 
 const APP_DIR = buradaki();
-const KOK = GLib.path_get_dirname(APP_DIR);
+// IKI seviye: src/plasma -> src -> kok. `assets/` ve `hooks/` src/ DISINDA,
+// depo kokunde -- biri varlik, digeri Claude Code entegrasyonu, ikisi de kod
+// degil. tools/appimage.sh AppDir'i ayni agacla kuruyor.
+const KOK = GLib.path_get_dirname(GLib.path_get_dirname(APP_DIR));
 const VARLIK = GLib.build_filenamev([KOK, 'assets', 'animations.json']);
 const SEMA_DIZINI = GLib.build_filenamev([APP_DIR, 'data']);
 const HOOK_KAYNAGI = GLib.build_filenamev([KOK, 'hooks', 'claude-pet-hook.py']);

@@ -29,7 +29,7 @@ import GLib from 'gi://GLib';
 // tracker.js modül gövdesinde durum dizinini OKUMUYOR (yalnızca `stateDir()`
 // çağrıldığında bakıyor), o yüzden statik import güvenli: `GLib.setenv`
 // aşağıda, `new Tracker()`'dan önce çalışıyor.
-import {DURUM, Tracker, inboxDir} from '../src/lib/tracker.js';
+import {DURUM, Tracker, inboxDir} from '../src/shared/tracker.js';
 
 /** Bu betiğin bulunduğu dizinden depo kökünü türet. */
 function kok() {

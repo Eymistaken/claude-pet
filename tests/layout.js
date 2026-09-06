@@ -17,7 +17,7 @@ import {
     KAYITSIZ, characterRect, clampOrigin, defaultOrigin, fromRelative,
     kacinKayitsiz, kayitliMi, monitorIndexForOrigin, pickMonitor,
     resolveOrigin, toRelative,
-} from '../src/lib/layout.js';
+} from '../src/shared/layout.js';
 
 let gecti = 0;
 let kaldi = 0;

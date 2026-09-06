@@ -81,7 +81,7 @@ fi
 # ------------------------------------------------------------------- 2  semalar
 
 adim "semalar"
-glib-compile-schemas "$KOK/app/data"
+glib-compile-schemas "$KOK/src/plasma/data"
 
 # --------------------------------------------------------- 3  AppDir + kaynaklar
 
@@ -92,11 +92,12 @@ mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/lib/girepository-1.0" \
          "$APPDIR/usr/share/glib-2.0/schemas" \
          "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
-# Agac depodakiyle AYNI: app/main.js kardeslerini ../src ve ../assets diye
-# buluyor, yani AppImage icinde de depoda da tek kod yolu.
-cp -r "$KOK/app" "$APPDIR/app"
+# Agac depodakiyle AYNI: src/plasma/main.js ortak motoru ../shared, varlik ve
+# hook'lari iki seviye yukaridan (../../assets, ../../hooks) buluyor. Ayni
+# agaci burada da kurmak, AppImage ile depo arasinda tek kod yolu birakiyor.
 mkdir -p "$APPDIR/src" "$APPDIR/assets" "$APPDIR/hooks"
-cp -r "$KOK/src/lib" "$APPDIR/src/lib"
+cp -r "$KOK/src/plasma" "$APPDIR/src/plasma"
+cp -r "$KOK/src/shared" "$APPDIR/src/shared"
 cp "$KOK/assets/animations.json" "$APPDIR/assets/"
 cp "$KOK/hooks/claude-pet-hook.py" "$APPDIR/hooks/"
 
@@ -173,7 +174,7 @@ cp "$SVG_YUKLEYICI" "$PB/"
 
 adim "glib semalari"
 # GTK ve libadwaita kendi semalarini ariyor. Bizimki AYRI: uygulama onu
-# `SettingsSchemaSource` ile kendi dizininden aciyor (app/data), cunku ayar
+# `SettingsSchemaSource` ile kendi dizininden aciyor (src/plasma/data), cunku ayar
 # arka ucu da ayri (keyfile).
 for s in "$LIBDIR/../../share/glib-2.0/schemas"/org.gtk.gtk4.*.gschema.xml \
          /usr/share/glib-2.0/schemas/org.gtk.gtk4.*.gschema.xml \
@@ -183,9 +184,9 @@ done
 glib-compile-schemas "$APPDIR/usr/share/glib-2.0/schemas" >/dev/null
 
 adim "ikon + .desktop"
-gjs -m "$KOK/tools/ikon.js" "$KOK/app/data/claude-pet.png" 256 >/dev/null
-cp "$KOK/app/data/claude-pet.png" "$APPDIR/claude-pet.png"
-cp "$KOK/app/data/claude-pet.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/"
+gjs -m "$KOK/tools/ikon.js" "$KOK/src/plasma/data/claude-pet.png" 256 >/dev/null
+cp "$KOK/src/plasma/data/claude-pet.png" "$APPDIR/claude-pet.png"
+cp "$KOK/src/plasma/data/claude-pet.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/"
 
 cat > "$APPDIR/io.github.eymistaken.ClaudePet.desktop" <<'DESKTOP'
 [Desktop Entry]
@@ -210,7 +211,7 @@ export GSETTINGS_SCHEMA_DIR="$HERE/usr/share/glib-2.0/schemas"
 export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 
 # dconf BAGIMLILIGI YOK: kendi ayarlarimiz acikca keyfile arka ucundan
-# geciyor (app/ayarlar.js), geri kalan her sey (GTK'nin kendi semalari)
+# geciyor (src/plasma/ayarlar.js), geri kalan her sey (GTK'nin kendi semalari)
 # bellekte. Boylece dconf kurulu olmayan bir sistemde de uyari cikmiyor.
 export GSETTINGS_BACKEND=memory
 
@@ -233,7 +234,7 @@ export GSK_RENDERER=cairo
 # `CDLL(...)` numarasinin karsiligi yok; tek yol bu.
 export LD_PRELOAD="$HERE/usr/lib/libgtk4-layer-shell.so.0${LD_PRELOAD:+:$LD_PRELOAD}"
 
-exec "$HERE/usr/bin/gjs" -m "$HERE/app/main.js" "$@"
+exec "$HERE/usr/bin/gjs" -m "$HERE/src/plasma/main.js" "$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"
 

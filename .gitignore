@@ -1,6 +1,6 @@
-# derlenmis sema
-src/schemas/gschemas.compiled
-app/data/gschemas.compiled
+# derlenmis sema -- iki on yuzde de uretiliyor, hicbiri depoya girmez
+src/gnome/schemas/gschemas.compiled
+src/plasma/data/gschemas.compiled
 
 # paketleme ciktisi
 *.shell-extension.zip

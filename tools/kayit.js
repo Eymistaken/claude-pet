@@ -1,7 +1,7 @@
 #!/usr/bin/env -S gjs -m
 /* Kare kaydedici — README'deki GIF'i üreten araç.
  *
- * NEDEN GJS: çizim `src/lib/sprite.js`'ten geliyor, yani buradaki kareler
+ * NEDEN GJS: çizim `src/shared/sprite.js`'ten geliyor, yani buradaki kareler
  * kabuğun çizdiğinin AYNISI. Belgelerdeki görüntü için ikinci bir çizim
  * yolu yazmak, iki yolun zamanla ayrışması demekti.
  *
@@ -24,8 +24,8 @@ import Cairo from 'gi://cairo';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
-import {loadAnimations} from '../src/lib/animations.js';
-import {KATMANLAR, drawLayer, unionBox} from '../src/lib/sprite.js';
+import {loadAnimations} from '../src/shared/animations.js';
+import {KATMANLAR, drawLayer, unionBox} from '../src/shared/sprite.js';
 
 /** GIF'in arka planı. GIF tek bir şeffaflık indeksi taşıyabildiği için
  *  şeffaf bırakmak yerine düz bir zemin veriliyor — koyu zeminde turuncu

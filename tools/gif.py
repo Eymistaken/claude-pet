@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """README'deki GIF'i uretir -- `make gif`.
 
-Iki adim: `tools/kayit.js` kareleri PNG'ye basiyor (cizim src/lib/sprite.js'ten
+Iki adim: `tools/kayit.js` kareleri PNG'ye basiyor (cizim src/shared/sprite.js'ten
 geliyor, yani kabugun cizdiginin aynisi), burasi onlari GIF'e diziyor. Kare
 sureleri varligin kendi ritmi (holds/fps), yani GIF gercek hizinda oynuyor.
 

@@ -3,7 +3,7 @@
  * EKLENTIDEN FARKI TEK CUMLE: orada maskot gnome-shell'in sahnesine iki
  * Clutter actor olarak ekleniyordu, burada `wlr-layer-shell` protokoluyle
  * `overlay` katmanina konan TEK bir GTK4 penceresi. Cizim, ritim, durum
- * makinesi ve konum aritmetigi ayni dosyalardan geliyor (`src/lib/`), yani
+ * makinesi ve konum aritmetigi ayni dosyalardan geliyor (`src/shared/`), yani
  * degisen sadece "nereye ciziliyor" sorusu.
  *
  * NEDEN TEK PENCERE, EKLENTIDE NEDEN IKI ACTOR'DU. Eklentide laptop ayri bir
@@ -29,8 +29,8 @@ import Gtk from 'gi://Gtk?version=4.0';
 import LayerShell from 'gi://Gtk4LayerShell?version=1.0';
 import cairo from 'gi://cairo';
 
-import {drawLayer, unionBox} from '../src/lib/sprite.js';
-import * as Layout from '../src/lib/layout.js';
+import {drawLayer, unionBox} from '../shared/sprite.js';
+import * as Layout from '../shared/layout.js';
 
 import {monitorleriOku} from './ekran.js';
 import {tamSayilariYaz} from './ayarlar.js';

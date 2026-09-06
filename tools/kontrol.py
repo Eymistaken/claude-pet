@@ -66,7 +66,7 @@ def oku_json(yol):
 
 def metadata_kontrol():
     baslik('metadata.json')
-    yol = os.path.join(KOK, 'src', 'metadata.json')
+    yol = os.path.join(KOK, 'src', 'gnome', 'metadata.json')
     try:
         meta = oku_json(yol)
     except Exception as e:
@@ -108,7 +108,7 @@ def metadata_kontrol():
 
 def sema_kontrol(meta):
     baslik('sema')
-    dizin = os.path.join(KOK, 'src', 'schemas')
+    dizin = os.path.join(KOK, 'src', 'gnome', 'schemas')
     dosyalar = [d for d in os.listdir(dizin) if d.endswith('.gschema.xml')]
     if not dosyalar:
         hata('schemas/ icinde .gschema.xml yok')
@@ -220,7 +220,7 @@ def varlik_kontrol():
 def js_kontrol():
     baslik('JS sozdizimi')
     hedefler = []
-    for alt in ('src', 'src/lib', 'tools', 'tests'):
+    for alt in ('src/shared', 'src/gnome', 'src/plasma', 'tools', 'tests'):
         dizin = os.path.join(KOK, alt)
         if not os.path.isdir(dizin):
             continue
@@ -262,6 +262,75 @@ print(`SAYI ${yollar.length} ${kaldi}`);
                 tamam(f'{toplam} JS dosyasi ayristirildi (gjs Reflect.parse)')
 
 
+# ------------------------------------------------------------ goreli import'lar
+
+# Iki on yuz ortak motoru FARKLI yollardan goruyor ve bu bilerek boyle:
+#
+#   src/plasma/  ->  ../shared/     depo agacinda dogrudan cozuluyor
+#   src/gnome/   ->  ./shared/      ANCAK KURULDUKTAN SONRA cozuluyor
+#
+# Ikincisi bir eklenti kisitindan geliyor: gnome-shell bir eklentiyi yalnizca
+# kendi dizini altindan import ettirir, o yuzden `make install` ve `make pack`
+# src/shared'i <ext>/shared'e duzlestiriyor. Yani `src/gnome/extension.js`teki
+# yollar depo agacinda YANLIS gorunur ama kurulumda dogrudur.
+#
+# Bu fonksiyon her iki yuzu de KENDI duzenine gore cozuyor. Yakaladigi hata:
+# birinde yolu duzeltip digerini unutmak -- `Reflect.parse` bunu goremez,
+# cunku import hedeflerini hic acmaz.
+
+IMPORT_KALIP = re.compile(r"""^\s*(?:import|export)\b[^'"]*from\s*['"](\.[^'"]+)['"]""",
+                          re.MULTILINE)
+
+
+def _import_hedefleri(dosya):
+    with open(dosya, encoding='utf-8') as f:
+        return IMPORT_KALIP.findall(f.read())
+
+
+def import_kontrol():
+    baslik("goreli import'lar")
+
+    # (kaynak dizin, o dizindeki dosyalarin goreli yollari HANGI koke gore
+    #  cozulecegi, aciklama)
+    yuzler = [
+        ('src/gnome',  {'shared': 'src/shared'}, 'kurulum duzeni'),
+        ('src/plasma', None,                     'depo agaci'),
+    ]
+
+    toplam = kirik = 0
+    for alt, esleme, aciklama in yuzler:
+        dizin = os.path.join(KOK, alt)
+        if not os.path.isdir(dizin):
+            continue
+        for ad in sorted(os.listdir(dizin)):
+            if not ad.endswith('.js'):
+                continue
+            kaynak = os.path.join(dizin, ad)
+            for hedef in _import_hedefleri(kaynak):
+                toplam += 1
+                # `./shared/x.js` gibi bir yol kurulum duzeninde baska bir
+                # dizine dusuyorsa esleme uzerinden gercek kaynagi bul.
+                cozum = None
+                if esleme:
+                    for takma, gercek in esleme.items():
+                        onek = './' + takma + '/'
+                        if hedef.startswith(onek):
+                            cozum = os.path.join(
+                                KOK, gercek, hedef[len(onek):])
+                            break
+                if cozum is None:
+                    cozum = os.path.normpath(os.path.join(dizin, hedef))
+
+                if not os.path.isfile(cozum):
+                    hata(f'{alt}/{ad}: {hedef} -> yok '
+                         f'({os.path.relpath(cozum, KOK)}, {aciklama})')
+                    kirik += 1
+
+    if not kirik:
+        tamam(f"{toplam} goreli import hedefine ulasiyor "
+              f"(gnome kurulum duzeni, plasma depo agaci)")
+
+
 def python_kontrol():
     baslik('Python sozdizimi')
     hedefler = []
@@ -291,6 +360,7 @@ def main():
     sema_kontrol(meta)
     varlik_kontrol()
     js_kontrol()
+    import_kontrol()
     python_kontrol()
 
     print()

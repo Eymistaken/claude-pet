@@ -15,7 +15,7 @@
 
 import GLib from 'gi://GLib';
 
-import {Player} from '../src/lib/player.js';
+import {Player} from '../src/shared/player.js';
 
 let gecti = 0;
 let kaldi = 0;

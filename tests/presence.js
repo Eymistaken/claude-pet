@@ -17,7 +17,7 @@
 
 import GLib from 'gi://GLib';
 
-import {Presence, SURECLER} from '../src/lib/presence.js';
+import {Presence, SURECLER} from '../src/shared/presence.js';
 
 /** Yalnızca bu koşuma ait bir süreç adı.
  *

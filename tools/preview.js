@@ -5,7 +5,7 @@
  * başlıyor, eklenti yükleniyor, ekran görüntüsü alınıyor). Poz kontrolü,
  * ritim kontrolü ve "beat'ler yerinde mi" sorusu buradan cevaplanacak.
  *
- * ÇİZİM KOPYALANMADI: `src/lib/sprite.js`, `animations.js` ve `player.js`
+ * ÇİZİM KOPYALANMADI: `src/shared/sprite.js`, `animations.js` ve `player.js`
  * doğrudan içeri alınıyor. Yani burada gördüğün kare ve ritim, kabuğun
  * çizdiğinin aynısı — iki ayrı çizim yolu tutmak zorunda değiliz.
  *
@@ -21,9 +21,9 @@
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
 
-import {loadAnimations} from '../src/lib/animations.js';
-import {KATMANLAR, drawLayer, frameStripCount} from '../src/lib/sprite.js';
-import {Player} from '../src/lib/player.js';
+import {loadAnimations} from '../src/shared/animations.js';
+import {KATMANLAR, drawLayer, frameStripCount} from '../src/shared/sprite.js';
+import {Player} from '../src/shared/player.js';
 
 /** Büyük oynatma alanının hücre boyutu. */
 const OYNAT_HUCRE = 5;
