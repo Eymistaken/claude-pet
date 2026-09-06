@@ -1033,3 +1033,227 @@ Notlar / bilinen eksikler
   da o satırlardı — kazancı yok, bedeli var.
 
 <!-- Proje fazları bitti. Yayın: metadata.json'daki version 1'de bırakıldı. -->
+
+---
+
+## Faz 7 — KDE / AppImage sürümü            2026-08-24
+
+Kullanıcı: "Bu uygulamayı başka distrolarda da kurabilmek için bir AppImage
+yap. Animasyonlar ve çalışma mantığı aynı olsun, KDE'de de çalışsın. Sistemle
+birlikte başlayan hafif bir şey olsun, tek görevi pet'i koymak; ayarlar için
+AppImage'ı açmak yetsin."
+
+Branch: `appimage`.
+
+### Dayanak
+
+İki gerçek bu fazı bir yeniden yazım olmaktan çıkardı:
+
+1. **`src/lib/` zaten kabuktan bağımsızdı.** Sekiz modülün hiçbirinde `St`,
+   `Main`, `global`, `Meta` geçmiyor. Faz 1'den beri dosya başlıklarında
+   yazılı olan bu kural, burada karşılığını verdi: yeni uygulama o dosyaları
+   **kopyalamadan** import ediyor. Regresyon kalkanı da hazır geldi —
+   `tests/` altındaki 110 iddia iki sürümü birden sınıyor.
+2. **KWin `wlr-layer-shell` konuşuyor.** `overlay` katmanı tam ekranın
+   üstünde, `set_input_region` gerçekten uygulanıyor, margin ile piksel
+   piksel konumlanıyor. Eklentideki üç hilenin (addTopChrome, unredirect
+   kapatma, laptobu ayrı `reactive: false` actor yapma) hiçbirine gerek yok.
+
+Yeniden yazılan tek şey `extension.js`'in işi. 901 satırın karşılığı 392
+satır (`app/pencere.js`) + 357 satır (`app/main.js`).
+
+Yapılanlar
+- `app/` ağacı: `main.js` (tek örnek, zincir kurulumu), `pencere.js`
+  (layer-shell + çizim + sürükleme + menü), `tercihler.js` (Adw ayarlar),
+  `ayarlar.js` (şema + keyfile arka uç), `ekran.js` (Gdk → layout.js köprüsü),
+  `entegrasyon.js` (hook / autostart / menü girdisi).
+- `tools/appimage.sh`: sudo'suz sysroot → gtk4-layer-shell derlemesi → AppDir
+  → `ldd` kapanışı → appimagetool. `tools/toolchain.sh`, `tools/ikon.js`.
+- `Makefile`: `app`, `app-run`, `appimage`, `ikon`.
+- `README-appimage.md`, ana README'ye yönlendirme, CLAUDE.md'ye ortak kod
+  sözleşmesi.
+
+### Eklentiden dört bilinçli sapma
+
+1. **İki actor yerine tek pencere + giriş bölgesi.** Eklentide laptop ayrı bir
+   actor'dü çünkü Wayland'de `affectsInputRegion` atlanıyordu. Layer-shell'de
+   `Gdk.Surface.set_input_region()` gerçekten uygulanıyor; tek pencere iki
+   katmanı çiziyor, giriş bölgesi yalnızca karakter kutusu. Sonuç eklentiden
+   **daha iyi**: laptop ile karakter arasındaki boşluk artık tıklama yutmuyor.
+2. **`cell` artık `scale_factor` ile çarpılmıyor.** `St` fiziksel piksele
+   çiziyordu, GTK4 mantıksal piksele. Aynı formül HiDPI'da pet'i iki katına
+   çıkarırdı. İki sürüm arasındaki en sessiz fark; koda yorum düşüldü.
+3. **Ayarlar dconf'ta değil.** `Gio.keyfile_settings_backend_new` ile düz
+   metin `~/.config/claude-pet/ayarlar.conf`. Sebep: KDE kurulumunda dconf'un
+   varlığı garanti değil. Şema da sisteme kurulmuyor,
+   `SettingsSchemaSource.new_from_directory` ile paketin içinden okunuyor.
+   Anahtarlar birebir aynı, yani `prefs.js` neredeyse birebir taşındı.
+4. **Sürükleme artımlı.** `origin += ofset`, basma noktası sabit. Kümülatif
+   model (`yeni = başlangıç + ofset`) burada titrerdi: yüzey margin ile
+   taşındığı için kompozitör düzeltici bir motion olayı gönderiyor ve o
+   olayda ofset ~0 oluyor.
+
+### Ölçülmüş engeller
+
+- **`sudo` parola istiyor**, `libgtk-4-dev` kurulu değil. Çözüm: `apt-get
+  download` + `dpkg-deb -x` ile `build/toolchain/sysroot`. Sisteme hiçbir şey
+  yazılmadı. `apt-cache depends --recurse` KULLANILAMAZ: 473 paket ve 257 MB
+  (qemu-user ve i386 dahil) indiriyor. İki seviye yetiyor.
+- **`PKG_CONFIG_SYSROOT_DIR` `g-ir-scanner`ın yolunu da kaydırıyor.** meson
+  "distributor issue" diye durdu. Sysroot'un `usr/bin`ine sembolik bağ.
+- **`pkill -f toolchain.sh` çağıranı öldürüyor** — `tools/nested.sh` için Faz
+  0'da düşülen notun aynısı, bu kez toolchain betiğinde yaşandı.
+- **gtk4-layer-shell GJS'de `LD_PRELOAD` istiyor.** Kütüphane libwayland
+  çağrılarını shim'liyor ve `libwayland-client`'tan önce yüklenmek zorunda;
+  Python'daki `CDLL(...)` numarasının GJS'de karşılığı yok. AppRun'da
+  ayarlanıyor. `liblayer-shell-preload.so` başka bir şey (rastgele Wayland
+  uygulamaları için genel hack), o değil.
+- **Alt sürece temiz ortam.** Hook betiği konak `python3` ile çalışıyor;
+  AppRun'ın `LD_PRELOAD`/`LD_LIBRARY_PATH`i miras kalırsa konak python bizim
+  glib kopyamızı yüklemeye çalışır. `GLib.environ_unsetenv` ile temizleniyor.
+
+Doğrulama (kod düzeyi — canlı pencere testi YAPILMADI)
+- [x] `gjs -m tests/{replay,director,layout,presence}.js` → 21/50/26/13,
+      **110/110**. `src/lib` değişmediği için bu, "aynı mantık" iddiasının
+      kanıtı.
+- [x] `make check` → 17 JS + 4 Python dosyası, 0 uyarı. (Kontrol betiği yeni
+      `app/*.js` dosyalarını da ayrıştırdı.)
+- [x] AppImage üretildi: **44 MB**, 108 kütüphane, 18 typelib.
+- [x] Bağımlılık kapanışı tam: `ldd` ile tek bir "not found" yok; `libgtk-4`in
+      45 bağımlılığının tamamı AppDir içinden çözülüyor, konak GTK'sına
+      sızıntı yok.
+- [x] AppImage GNOME'da çalıştırıldı → `is_supported()` false, anlaşılır hata
+      ve çıkış kodu 2. Bu tek koşum gjs'in paketten açıldığını, 18 typelib'in
+      yüklendiğini, altı ES modülünün ayrıştırıldığını ve GTK'nın
+      başladığını da doğruluyor.
+
+Notlar / bilinen eksikler
+- **Pencere davranışı KDE'de sınanmadı.** Tıklama geçirgenliği, tam ekran,
+  sürükleme, sağ tık menüsü ve monitör seçimi gerçek bir KWin oturumunda
+  denenmedi — kullanıcı yerel kompozitör kurulmamasını istedi, test
+  `oneauraaa`ya bırakıldı. Kontrol listesi `README-appimage.md` sonunda.
+- **X11 yok.** Bilinçli: layer-shell bir Wayland protokolü, X11 karşılığı
+  override-redirect + XShape ve GTK4 ikisini de doğrudan vermiyor.
+- **glibc 2.39 tabanı** (Zorin 18'de derlendi). Debian 12 / Ubuntu 22.04 /
+  Mint 21 kapsam dışı; Arch, Fedora 40+, KDE neon 24.04, Debian 13 kapsamda.
+  Konteyner aracı kurulu olmadığı için daha eski bir tabanda derlenmedi.
+- **`sleep` klibi hâlâ yok**, dolayısıyla uyku pozu bu sürümde de yok.
+- **libadwaita ayarlar penceresi** KDE'de GNOME'lu duruyor. `src/prefs.js`i
+  yeniden yazmamak için kabul edildi.
+
+---
+
+## Faz 8 — Donma teşhisi ve dayanıklılık            2026-09-06
+
+Kullanıcının tarifi üç parçalıydı: pet animasyon oynatırken bir anda donuyor;
+ayarlardan `Pet` kapatılınca ekrandan gitmiyor; ayarlar penceresi kapatılmak
+istenince ekranda ölü bir dikdörtgen olarak kalıyor — tıklamalar arkasına
+geçiyor, ne süreç listesinde ne taskbar'da izi var, tek çare Looking Glass.
+
+### Teşhis: sebep bu depoda değil
+
+`journalctl --user` (`gnome-shell[8124]` 5 Eylül, `gnome-shell[2377]`
+6 Eylül):
+
+| Bulgu | Ölçüm |
+|---|---|
+| `Attempting to call back into JSAPI during the sweeping phase of GC` | 6 Eylül 12:40–12:48, **dakikada 75.000 satır**; 5 Eylül 19:52–19:55 arası 35.380 + 34.754 |
+| `meta_window_set_stack_position_no_sync: assertion 'window->stack_position >= 0' failed` | 6 Eylül 12:35, 12:36, 12:39 |
+| `Object .MetaSurfaceActorWayland … has been already disposed` | 5 Eylül 19:57:14 |
+| `JS ERROR: TypeError: this.actor is null` — `windowManager.js` `_destroyWindowDone` → `WindowDimmer._syncEnabled` | günde 1–3 kez, ay boyunca |
+| gnome-shell CPU | 69 dakikalık oturumda ortalama %19,8 |
+
+Üç ölçüm claude-pet'i eliyor:
+
+1. **6 Eylül'deki fırtına pet KAPALIYKEN oldu.** Eklenti 12:03:30'da
+   `PET KAPALI (ayar)` ile yüklendi, pet 12:54:37'de açıldı; fırtına arada.
+2. **Eklenti "gizle" işini doğru yapmıştı.** 5 Eylül 19:55:38'de sırasıyla
+   `yönetmen: claude kapalı · pet çekildi` → `unredirect geri verildi` →
+   `pet kapalı (ayar)`. Aktörler gizlendi; ekran onu yansıtmadı.
+3. **enable/disable dengesi tam.** Her gnome-shell PID'i için tam bir `etkin`
+   satırı var — hayalet aktör birikmesi yok.
+
+Şüpheli, aynı anda her pencereye dokunan başka eklentiler: bu makinede iki
+yuvarlak-köşe eklentisi birlikte etkin (`Rounded_Corners@lennart-k` +
+`rounded-windows@marcosgt.github.io`) ve `zorin-magic-lamp-effect` pencere yok
+etme animasyonuna karışıyor. Canlı oturumda eleme YAPILMADI (kullanıcı kararı);
+`README.md`'deki "Known issue" bölümü yöntemi yazıyor.
+
+Yapılanlar (hepsi "bu ortamda hayatta kal" başlığı altında)
+- **`Hide pet` menü öğesi** — eklenti ve uygulama, iki sürümde de. Pet'i
+  kapatmanın tek yolu artık GTK penceresi açıp kapatmak değil; ölü pencere
+  hatası ayrı bir sürecin kapanmasında doğduğu için bu, kullanıcıyı o hatanın
+  yolundan tamamen çıkarıyor.
+- **Bekçi (`Director.watchdog`)** — asıl çaresizlik şuydu: bütün ilerleme
+  `onCycle`e bağlı ve o bildirim bir kez düşerse pet o karede SONSUZA KADAR
+  kalıyor. Bekçi varlık yoklamasının `tick`ine biniyor (yeni zamanlayıcı YOK)
+  ve `Player.stalled` doğruysa sırayı yeniden tetikliyor. `_held` iken hiç
+  sorulmuyor: duraklatılmış/menüsü açık/claude'u kapalı bir pet kasıtlı duruyor.
+- **`Player.stalled`** — ölçüt "çok kareli klip var, zamanlayıcı yok, bitmiş de
+  değil". Tek karelik döngüler zaten timer kurmuyor, biten klipler `_finished`;
+  yani bu üçlü normal işleyişte hiç oluşmuyor.
+- **`Player.play()` döngü bayrağı** — aynı klip zaten çalıyorken erken dönüyor
+  ama `_loop`u yazmıyordu; dizideki yeri değişen bir klip yanlış bayrakla
+  sürebilirdi.
+- **`disable()` adım adım korumalı** — eskiden tek bir dış `try/catch` vardı ve
+  ortada patlayan bir adım aktörleri ekranda, unredirect'i kapalı bırakıyordu.
+  Artık her adım kendi korumasında, `_releaseUnredirect()` `finally`'de.
+- **`_sweepGhosts()`** — `enable()` sırasında `claude-pet-` ile başlayan
+  sahipsiz aktörler süpürülüyor. Günlükte bunun izi YOK; şikâyetin tarifine
+  karşı sigorta.
+- **`Presence` zamanlayıcı hijyeni** — `_tick()` içinden `_arm()` çağrısı O AN
+  DISPATCH EDİLEN kaynağı siliyordu. Çalışıyordu ama
+  `Source ID N was not found when attempting to remove it` uyarısını üreten
+  kalıp tam olarak bu (günlükte 5 Eylül'de üç kez). Artık geri çağrı tek
+  atımlık: kimliği bırak → turu dön → yenisini kur.
+- **`_writeInts()` tek yazıcı** — her sürükleme bitişinde yeni bir gecikmeli
+  `Gio.Settings` yaratılıyordu; artık bir kez yaratılıp saklanıyor.
+
+Doğrulama
+- [x] `make check` → 18 JS + 4 Python dosyası, 0 uyarı.
+- [x] `make replay` → beş test dosyası, **139/139**. Yeni: `tests/player.js`
+      (17 iddia, gerçek `Player` gerçek GLib zamanlayıcılarıyla),
+      `tests/director.js`e bekçi iddiaları (50 → 58),
+      `tests/presence.js`e `tick` iddiaları (13 → 17).
+- [x] `make nested` — sağ tık menüsünde dört öğe göründü, **`Hide pet`
+      tıklandı**: pet ekrandan gitti, log `pet kapalı (ayar)` dedi, hata yok.
+      İzole dconf'tan `enabled true` yazılınca pet geri geldi (`pet açık
+      (ayar)` → `laptop_out` → `typing`).
+- [x] **Girdi geçirgenliği** — nested oturumda pet hesap makinesinin ÜSTÜNE
+      sürüklendi (yani `addTopChrome` hâlâ pencerelerin üstünde), sonra laptop
+      katmanının pikseline tıklandı: tıklama altındaki `(` düğmesine geçti,
+      hesap makinesi ekranında `(` belirdi.
+- [x] Nested log: claude-pet kaynaklı tek bir hata/uyarı yok, `JS ERROR` sayısı 0.
+- [ ] **Bekçinin canlı tetiklenmesi SINANMADI.** Zinciri elle kırmak nested
+      kabukta Looking Glass istiyor; `Alt+F2` gerçek kabuk tarafından
+      yakalanıyor ve GNOME 46'da `org.gnome.Shell` D-Bus arayüzünde
+      `UnsafeMode` özelliği yok, yani `Eval`e de ulaşılamıyor. Yerine: iki
+      yarısı da birim testli (25 iddia) ve `tick` sinyalinin gerçekten var
+      olduğu ölçüldü — olmayan bir sinyale `connect()` ATIYOR, nested'de
+      `enable()` temiz bittiğine göre bağ kurulmuş.
+
+Notlar / bilinen eksikler
+- **GERÇEK OTURUM ESKİ KODU ÇALIŞTIRMAYA DEVAM EDİYOR.** GNOME 46
+  `extensionSystem.js`: `await import(extensionJs.get_uri())` ve hemen yanında
+  "Extensions can only be imported once". `gnome-extensions disable/enable`
+  JS'i yeniden okumuyor; Wayland'de yeni kodun gerçek masaüstüne inmesi için
+  oturumu kapatıp açmak gerekiyor. (`tools/nested.sh` başlığında zaten yazıyordu.)
+- **Ölü pencerenin ne olduğu kullanıcının kendi Looking Glass geçmişinden
+  doğrulandı**: `inspect(1237, 332)` → `[MetaSurfaceActorWayland]` →
+  `r(0).destroy()`. Yani ekranda kalan şey istemcisi çoktan gitmiş bir
+  kompozitör yüzey aktörü — süreç listesinde ve taskbar'da izinin olmaması,
+  tıklamaların arkasına geçmesi ve yalnızca LG ile kaldırılabilmesi bununla
+  birebir örtüşüyor.
+- **`make nested` inbox'ı gerçek oturumla PAYLAŞIYOR.** `nested.sh` dconf'u
+  izole ediyor ama `CLAUDE_PET_STATE_DIR`i etmiyor; iki kabuk aynı olay
+  dosyalarına yarışıyor ve kaybeden `bozuk olay dosyası atlandı` /
+  `olay dosyası silinemedi` uyarısı basıyor. Test ortamı kaynaklı, kodda
+  sorun değil — ama nested logu okurken bu iki satır göz ardı edilmeli.
+- **GC fırtınasının kaynağı bulunmadı.** Eleme kullanıcının canlı oturumunu
+  değiştireceği için yapılmadı; yöntem `README.md`'de.
+- **Bekçi ancak yoklama dönüyorken çalışır.** `enabled` kapalıyken varlık
+  yoklaması da duruyor — kurtarılacak bir şey de olmadığı için sorun değil.
+- **Günlük satırları `console.debug`'a İNDİRİLMEDİ.** Ölçüldü: pet etkin
+  çalışmada dakikada ~12 satır yazıyor (12:56:25–12:57:03 arasında 8 satır),
+  kabuğun 75.000'i yanında sıfır. Buna karşılık bu teşhisi mümkün kılan iz tam
+  da o satırlardı — kazancı yok, bedeli var.

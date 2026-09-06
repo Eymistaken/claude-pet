@@ -6,21 +6,24 @@ Claude asks you something, and puts the laptop away when the job is done.
 
 ![claude-pet](docs/pet.gif)
 
-This branch is the **GNOME Shell 46 extension**.
+There are **two builds** in this repository, and they share everything that
+matters — the same animation file, the same state machine, the same clip
+timing, the same eight modules under `src/lib/`. They differ only in how the
+mascot gets onto the screen.
 
-> ### On KDE, Sway, Hyprland or COSMIC?
->
-> There is a second build of the same mascot — same animation file, same state
-> machine, same eight modules under `src/lib/` — packaged as a single
-> AppImage that uses the `wlr-layer-shell` protocol instead of drawing into
-> GNOME Shell. Grab it from the
-> **[releases page](https://github.com/Eymistaken/claude-pet/releases)**, or read about it on the
-> [`appimage` branch](https://github.com/Eymistaken/claude-pet/tree/appimage).
->
-> The split comes down to that one protocol: `wlr-layer-shell` lets a client
-> pin a surface above everything else, pass clicks through, and never take
-> focus. KWin and wlroots speak it; GNOME's compositor Mutter does not — which
-> is exactly why GNOME needs an extension.
+| Your desktop | What to install | Read |
+|---|---|---|
+| **GNOME** (Wayland) | GNOME Shell 46 extension | this file |
+| **KDE Plasma**, Sway, Hyprland, COSMIC (Wayland) | AppImage — one file, nothing to install | **[README-appimage.md](README-appimage.md)** |
+| Any X11 session | neither — see [Why no X11](README-appimage.md#why-no-x11) | |
+
+The split comes down to one protocol. `wlr-layer-shell` lets a client pin a
+surface above everything else, pass clicks through, and never take focus.
+KWin and wlroots speak it; GNOME's compositor Mutter does not. So on GNOME the
+mascot is drawn *into the shell* by an extension, and everywhere else it is a
+normal Wayland client using the protocol directly.
+
+The rest of this file is about **the GNOME extension**.
 
 **Target environment:** GNOME Shell 46 · Wayland · Zorin OS 18 / Ubuntu 24.04
 
@@ -49,21 +52,6 @@ make install     # installs under ~/.local/share/gnome-shell/extensions
 make enable      # enables it in the real session
 make hooks       # writes Claude Code hooks into ~/.claude/settings.json
 ```
-
-### From a release zip
-
-If you would rather not clone, every version is published as a
-`.shell-extension.zip` on the
-[releases page](https://github.com/Eymistaken/claude-pet/releases) — the ones
-tagged `ext-v*` (`v*` is the AppImage build):
-
-```sh
-gnome-extensions install --force claude-pet@eymistaken.local.shell-extension.zip
-gnome-extensions enable claude-pet@eymistaken.local
-```
-
-Then log out and back in, and run `make hooks` from a clone to wire up the
-Claude Code hooks — the pet hears nothing without them.
 
 `make hooks` leaves hooks you wrote by hand alone: it only adds its own
 entries (the ones with `claude-pet-hook.py` on the command line), takes a
@@ -122,7 +110,7 @@ Wayland gives a client no way to position its own window, has no concept of
 "always on top", and click-through cannot extend past a window's bounds.
 GNOME's compositor Mutter does not support the `wlr-layer-shell` protocol
 either — so the solution that works on Sway and Hyprland is unavailable here.
-(That solution is exactly what the [AppImage build](https://github.com/Eymistaken/claude-pet/releases) uses.)
+(That solution is exactly what the [AppImage build](README-appimage.md) uses.)
 
 That leaves one clean option: do not open a window. The mascot is added
 directly to GNOME Shell's scene graph as two Clutter actors — one for the
@@ -172,8 +160,8 @@ frames per second. If you would rather not see the pet in fullscreen,
 `make disable` (turning it off entirely — right-click → Pause is not enough)
 gives unredirect back.
 
-> The [AppImage build](https://github.com/Eymistaken/claude-pet/releases) does not pay this cost: on the `overlay` layer,
-> being above fullscreen windows is what the protocol guarantees.
+> The AppImage build does not pay this cost: on the `overlay` layer, being
+> above fullscreen windows is what the protocol guarantees.
 
 ## When the pet exists
 
@@ -428,7 +416,7 @@ make gif         # regenerate docs/pet.gif
 When working on the art use `make preview`, not `make nested` — it is much
 faster.
 
-The AppImage build lives on the [`appimage` branch](https://github.com/Eymistaken/claude-pet/tree/appimage).
+For the AppImage build, see [README-appimage.md](README-appimage.md).
 Contributor-facing architecture notes live in `CLAUDE.md` (Turkish).
 
 The roadmap is in `docs/PLAN.md`, phase by phase. Each phase's ready-made

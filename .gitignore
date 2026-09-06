@@ -1,5 +1,6 @@
 # derlenmis sema
 src/schemas/gschemas.compiled
+app/data/gschemas.compiled
 
 # paketleme ciktisi
 *.shell-extension.zip
