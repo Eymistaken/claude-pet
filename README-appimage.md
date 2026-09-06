@@ -152,6 +152,11 @@ Code session.
 
 ## Building from source
 
+The app lives in `src/plasma/` and pulls its engine from `src/shared/` — the
+same eight modules the GNOME extension uses. `make app-run` runs it locally
+without packaging (on GNOME it exits 2 with "not supported", which is the
+expected result there).
+
 ```bash
 make appimage
 ```

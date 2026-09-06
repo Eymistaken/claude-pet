@@ -402,6 +402,34 @@ happens in a nested session: `make nested`.
 
 ## Development
 
+### Repository layout
+
+One repository, three source trees. What is shared is readable from the
+directory name:
+
+```
+src/shared/   eight modules, no shell dependency  -> BOTH builds
+src/gnome/    extension.js, prefs.js, schemas/    -> GNOME only
+src/plasma/   GTK4 + wlr-layer-shell, data/       -> KDE/Sway/Hyprland only
+assets/       animations.json                     -> shared (an asset, not code)
+hooks/        claude-pet-hook.py                  -> shared (Claude Code side)
+tests/        exercise src/shared                 -> shared
+```
+
+`src/shared/` **must not depend on a shell**: none of the eight modules
+mention `St`, `Main`, `global` or `Meta` — only GLib/Gio/GObject. One
+shell-specific line there breaks the AppImage build.
+
+One asymmetry worth knowing: `src/gnome/extension.js` imports the shared
+engine as `./shared/...`, and that path does **not** resolve in the source
+tree. GNOME Shell only lets an extension import from under its own directory,
+so `make install` and `make pack` flatten `src/shared` into `<ext>/shared`.
+The path is correct only in the installed tree, and the extension is never run
+from the repository. `make check` verifies both front ends against their own
+layout.
+
+### Test hooks
+
 Two test hooks:
 
 ```sh
@@ -439,7 +467,7 @@ The roadmap is in `docs/PLAN.md`, phase by phase. Each phase's ready-made
 prompt for Claude Code is under `prompts/`, and what was actually done — with
 the measurements behind each decision — is in `docs/ILERLEME.md`.
 
-## Licence, and about the character
+## License, and about the character
 
 The code is MIT licensed — see `LICENSE`.
 
