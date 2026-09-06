@@ -14,6 +14,11 @@ name: AppImage
 
 on:
   push:
+    # YALNIZCA dal itmeleri. Filtre olmadan her ETIKET itmesi de bu isi
+    # kosuyordu (olculdu: appimage-son/master-son etiketleri iki bosuna
+    # kosu baslatti) -- ve VERSION'i henuz yayinlanmamis bir commit'e
+    # atilan bir etiket oradan surum cikarirdi.
+    branches: [master]
     # Tek depoda iki urun var: bu is yalnizca AppImage'i ilgilendiren
     # degisikliklerde kosuyor. `src/gnome/**` BILEREK yok -- eklentiye ozel
     # bir degisiklik icin gtk4-layer-shell'i kaynaktan derlemek bosuna.
