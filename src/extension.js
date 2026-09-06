@@ -101,6 +101,7 @@ export default class ClaudePetExtension extends Extension {
         this._originY = 0;
         this._tracker = null;
         this._director = null;
+        this._writerSettings = null;
         this._menu = null;
         this._menuManager = null;
         this._pauseItem = null;
@@ -141,6 +142,10 @@ export default class ClaudePetExtension extends Extension {
             this._presence = new Presence();
             this._connect(this._presence, 'changed',
                 (_p, varMi, ad) => this._applyPresence(varMi, ad));
+            // BEKÇİ zaten dönen yoklamaya biniyor — periyodik iş için ikinci
+            // bir zamanlayıcı kurulmuyor. Yönetmen takılmış bir klip görmezse
+            // bu bir no-op.
+            this._connect(this._presence, 'tick', () => this._director?.watchdog());
             // Genel anahtar kapaliysa yoklama da baslamiyor: kapali pet
             // hicbir sey tuketmiyor.
             this._present = this._enabled ? this._presence.start() : false;
@@ -157,6 +162,7 @@ export default class ClaudePetExtension extends Extension {
                 // o yüzden yönetmen player'a doğrudan değil buradan geçiyor.
                 play: (ad, secenekler) => this._playAnimation(ad, secenekler),
                 isRunning: () => this._player?.running ?? false,
+                isStalled: () => this._player?.stalled ?? false,
                 sleepTimeoutMs: this._readSleepMs(),
             });
             // Duraklatılmış açılışta bile açılış pozu çiziliyor; `start()`
@@ -210,70 +216,122 @@ export default class ClaudePetExtension extends Extension {
     }
 
     disable() {
+        // HER ADIM KENDİ KORUMASINDA. Eskiden tek bir dış `try/catch` vardı:
+        // ortada patlayan bir adım aktörleri ekranda ve unredirect'i kapalı
+        // bırakıyordu, üstelik sessizce — "pet kaybolmuyor" tarifi tam olarak
+        // bu biçimde görünür. Artık bir adımın düşmesi ötekileri atlatmıyor.
+        const guvenli = (ad, fn) => {
+            try {
+                fn();
+            } catch (error) {
+                console.error(`${LOG} disable · ${ad}: ${error}`);
+            }
+        };
+
         try {
             // Zamanlayıcı her şeyden önce dursun: aktör yok edildikten sonra
             // uyanan bir kare geri çağrısı ölü bir aktöre uzanır.
-            this._player?.stop();
+            guvenli('player', () => this._player?.stop());
             this._player = null;
 
-            this._director?.stop();
+            guvenli('director', () => this._director?.stop());
             this._director = null;
 
             // Dosya izleyicisi de zamanlayıcı gibi: aktörlerden önce sökülsün.
-            this._tracker?.stop();
+            guvenli('tracker', () => this._tracker?.stop());
             this._tracker = null;
 
-            if (this._presence) {
+            guvenli('presence', () => {
+                if (!this._presence)
+                    return;
                 const {fullScans, fastChecks} = this._presence.stats;
                 console.log(`${LOG} varlık yoklaması · ${fullScans} tam tarama · ` +
                     `${fastChecks} hızlı kontrol`);
                 this._presence.stop();
-                this._presence = null;
-            }
+            });
+            this._presence = null;
 
             // Sürüklemenin ORTASINDA kapatılıyor olabiliriz: kilit ekranı
             // disable() çağırıyor. Bırakılmamış bir Clutter.Grab bütün girdiyi
             // kilitler — aktörü yok etmeden önce mutlaka bırak.
-            this._endDrag(false);
+            guvenli('grab', () => this._endDrag(false));
 
             // Sinyaller aktörlerden ÖNCE koparılıyor: destroy() sırasında
             // tetiklenen bir geri çağrı yok olmuş alanlara uzanmasın. Ayar
-            // dinleyicileri de bu listede.
+            // dinleyicileri de bu listede. Her bağ ayrı korumada: tek bir ölü
+            // nesne kalan bağların hepsini sızdırmasın.
             for (const [object, id] of this._signals ?? [])
-                object.disconnect(id);
+                guvenli('signal', () => object.disconnect(id));
             this._signals = [];
 
             // Menü kaynak aktörden önce gitsin: kapanırken ona uzanıyor.
-            if (this._menu) {
+            guvenli('menu', () => {
+                if (!this._menu)
+                    return;
                 this._menuManager?.removeMenu(this._menu);
                 this._menu.destroy();
-            }
+            });
             this._menu = null;
             this._menuManager = null;
             this._pauseItem = null;
 
+            // Sökme ve yok etme AYRI korumada: chrome kaydı bozuksa bile
+            // aktörün kendisi ekrandan gitsin.
             for (const area of Object.values(this._actors ?? {})) {
-                Main.layoutManager.removeChrome(area);
-                area.destroy();
+                guvenli('removeChrome', () => Main.layoutManager.removeChrome(area));
+                guvenli('destroy', () => area.destroy());
             }
             this._actors = {};
-
-            this._releaseUnredirect();
 
             this._boxes = null;
             this._sheet = null;
             this._settings = null;
+            this._writerSettings = null;
             console.log(`${LOG} kapatıldı · ${this._frameCount} kare · ` +
                 `${this._resizeCount} kez boyutlandı · ` +
                 `${this._visibilityChanges} kez katman gizlendi/gösterildi`);
-        } catch (error) {
-            console.error(`${LOG} disable: ${error}`);
+        } finally {
+            // DENGE PAZARLIK KONUSU DEĞİL. Yukarıda ne düşerse düşsün
+            // unredirect geri veriliyor; verilmezse eklenti kapandıktan sonra
+            // da bütün oturum boyunca tam ekran bileşikleme yolundan geçer.
+            guvenli('unredirect', () => this._releaseUnredirect());
         }
     }
 
     // ---------------------------------------------------------------- aktörler
 
+    /** Önceki örnekten kalmış aktör var mı — varsa temizle.
+     *
+     * `disable()` yarıda kaldıysa ekranda SAHİPSİZ bir pet kalır: hiçbir alan
+     * onu tutmadığı için `enabled` anahtarını kapatmak bile gizlemez — gizleyen
+     * kod `this._actors`e bakıyor ve orada artık yeni aktörler var. Ad üzerinden
+     * süpürmek bunun tek kesin çaresi ve maliyeti tek bir çocuk listesi taraması.
+     */
+    _sweepGhosts() {
+        const kalanlar = Object.values(this._actors ?? {});
+        let n = 0;
+
+        for (const child of Main.layoutManager.uiGroup.get_children()) {
+            if (!child.name?.startsWith('claude-pet-') || kalanlar.includes(child))
+                continue;
+            // Chrome olarak izlenmiyor olabilir (yarım kurulum): sökme hatası
+            // yok etmeyi engellemesin.
+            try {
+                Main.layoutManager.removeChrome(child);
+            } catch (_error) {
+                // yok sayılıyor
+            }
+            child.destroy();
+            n++;
+        }
+
+        if (n)
+            console.warn(`${LOG} önceki örnekten ${n} sahipsiz aktör temizlendi`);
+    }
+
     _buildActors() {
+        this._sweepGhosts();
+
         for (const [ad, ayar] of Object.entries(KATMAN_AYARI)) {
             const area = new St.DrawingArea({
                 name: `claude-pet-${ad}`,
@@ -359,15 +417,22 @@ export default class ClaudePetExtension extends Extension {
      * moda sokuyor: `g_settings_apply()` geri döndürmüyor ve `undelay` diye
      * bir şey yok. ÖLÇÜLDÜ (bu faz sırasında, canlı): `this._settings`
      * üzerinde bir kez `delay()` çağrıldıktan sonra `paused` ayarı bir daha
-     * dconf'a ULAŞMADI. O yüzden toplu yazma tek kullanımlık bir nesneden
-     * geçiyor; `this._settings` anında yazan modda kalıyor.
+     * dconf'a ULAŞMADI. O yüzden toplu yazma AYRI bir nesneden geçiyor;
+     * `this._settings` anında yazan modda kalıyor.
+     *
+     * O ayrı nesne artık her çağrıda yeniden yaratılmıyor, bir kez yaratılıp
+     * saklanıyor: sürüklenen bir pet saniyede bir `Gio.Settings` üretiyordu ve
+     * hiçbiri belirli bir anda bırakılmıyordu.
      */
     _writeInts(degerler) {
-        const settings = this.getSettings();
-        settings.delay();
+        if (!this._writerSettings) {
+            this._writerSettings = this.getSettings();
+            this._writerSettings.delay();
+        }
+
         for (const [anahtar, deger] of Object.entries(degerler))
-            settings.set_int(anahtar, deger);
-        settings.apply();
+            this._writerSettings.set_int(anahtar, deger);
+        this._writerSettings.apply();
     }
 
     _watchSettings() {
@@ -862,6 +927,12 @@ export default class ClaudePetExtension extends Extension {
         this._pauseItem = this._menu.addAction('Pause', () => this._togglePause());
         this._menu.addAction('Settings', () => this.openPreferences());
         this._menu.addAction('Reset position', () => this._resetPosition());
+        // AYARLAR PENCERESİNE GİRMEDEN KAPATMA YOLU. Eskiden pet'i kapatmanın
+        // tek yolu `Settings` → GTK penceresi → anahtar → pencereyi kapat idi.
+        // Kabuk takılmışken tam da o pencereyi kapatmak ekranda ölü bir
+        // dikdörtgen bırakabiliyor (bkz. README "Known issue"). Bu öğe ayrı bir
+        // süreci hiç işin içine katmıyor: doğrudan aynı anahtarı yazıyor.
+        this._menu.addAction('Hide pet', () => this._hidePet());
 
         this._connect(this._menu, 'open-state-changed',
             (_menu, acik) => this._onMenuOpen(acik));
@@ -887,6 +958,13 @@ export default class ClaudePetExtension extends Extension {
 
     _togglePause() {
         this._settings.set_boolean('paused', !this._paused);
+    }
+
+    /** Pet'i kapat. Geri açma yeri ayarlar penceresi — ekranda tıklanacak bir
+     *  pet kalmadığı için başka yolu yok, `src/prefs.js`teki alt yazı da bunu
+     *  söylüyor. */
+    _hidePet() {
+        this._settings.set_boolean('enabled', false);
     }
 
     /** Konumu unut: pet bulunduğu monitörün sağ altına döner.

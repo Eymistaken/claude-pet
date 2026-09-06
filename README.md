@@ -61,6 +61,14 @@ timestamped backup first, and writes the file atomically. Run
 A Claude Code session that is already open may not pick up the new hooks
 immediately; the reliable path is to start a new session.
 
+**Upgrading needs a log out and back in.** GNOME Shell imports an extension's
+JavaScript once per session — `extensionSystem.js` says so in as many words
+("Extensions can only be imported once") — so `make install` followed by
+`make disable && make enable` keeps running the old code. On Wayland the shell
+cannot be restarted in place, so the session has to end. For development,
+`make nested` gives you a throwaway shell that reloads in seconds and does not
+touch the real desktop.
+
 To remove:
 
 ```sh
@@ -75,7 +83,14 @@ dconf reset -f /org/gnome/shell/extensions/claude-pet/
 
 ## Settings
 
-**Right-click** the pet: Pause · Settings · Reset position.
+**Right-click** the pet: Pause · Settings · Reset position · Hide pet.
+
+**Hide pet** flips the same master switch as the settings window, without
+opening one. Use it when you just want the mascot gone — it is also the only
+route that does not involve a second process, which matters when the shell is
+misbehaving (see [Known issue](#known-issue-the-pet-freezes-or-a-dead-window-stays-on-screen)).
+To bring the pet back, open the settings window and turn **Pet** back on;
+there is no pet on screen left to right-click.
 
 | Setting | What it does |
 |---|---|
@@ -230,6 +245,61 @@ Adding a new pose is drawing, not coding: `tools/extract_frames.py` pulls
 frames out of a screen recording, you clean them up in the pose workshop, and
 you put the JSON back. Details in `docs/KAYIT.md` and `docs/ANIMASYON.md`
 (Turkish).
+
+## Known issue: the pet freezes, or a dead window stays on screen
+
+Two symptoms that look like the pet but are not:
+
+- The pet stops mid-animation and stays on one frame.
+- A window — often the settings window — stops responding, keeps its pixels on
+  screen, passes clicks through to whatever is behind it, and disappears from
+  the taskbar and from the process list. Only GNOME's Looking Glass can get
+  rid of it.
+
+Both are **GNOME Shell losing its footing, not the extension**. What it looks
+like in the journal:
+
+```sh
+journalctl --user -b | grep -c "sweeping phase of GC"
+journalctl --user -b | grep -E "stack_position >= 0|already disposed"
+```
+
+On the development machine the first command counted **75,000 lines per
+minute** for eight minutes straight, with `gnome-shell` burning 20% of a core.
+Every extension's timers and the stage repaint starve while that is happening;
+the pet is simply the most visible thing on screen that is supposed to move.
+The second command shows Mutter's window stack going inconsistent, which is
+what leaves a window painted after its client is gone. Looking Glass tells you
+exactly what the leftover is: `inspect(x, y)` over the dead rectangle returns a
+`MetaSurfaceActorWayland` — a compositor surface whose client has already
+exited. That is why it has no entry in the process list or the taskbar, why
+clicks fall through it, and why `r(0).destroy()` is the only thing that clears
+it.
+
+Three things separate this from claude-pet:
+
+1. It happens with **Pet turned off**, when the extension is doing nothing.
+2. When you turn Pet off during an episode the log shows the extension doing
+   its job (`pet çekildi`, `unredirect geri verildi`, `pet kapalı (ayar)`) —
+   the actors are hidden, the screen just is not redrawn to show it.
+3. `enable`/`disable` counts in the log are balanced, so no orphaned actors
+   are piling up.
+
+What claude-pet does about it: the director runs a **watchdog** on the
+existing presence poll (no extra timer). If the frame chain breaks, the clip
+is restarted within one poll instead of staying frozen forever. And **Hide
+pet** in the right-click menu means you never have to open — and then close —
+a GTK window to get rid of the mascot.
+
+What is actually worth chasing is another extension. Prime suspects are any
+two that decorate or animate every window at once; on the development machine
+that was two rounded-corner extensions enabled together plus a window
+destroy-animation effect. Bisect them:
+
+```sh
+gnome-extensions list --enabled
+gnome-extensions disable <uuid>     # one at a time, then watch the count above
+```
 
 ## Troubleshooting
 

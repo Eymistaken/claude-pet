@@ -48,6 +48,10 @@ function kur(klipler = KLIPLER) {
     let calisiyor = false;
     let sonKlip = null;
     let sonLoop = false;
+    // "Zincir koptu": klip ortada kaldi, tur bildirimi HIC gelmedi. Gercek
+    // player bunu `stalled` ile bildiriyor; burada tek bayrak yetiyor, cunku
+    // bu dosyanin olctugu sey zamanlama degil yonetmenin verdigi KARAR.
+    let takildi = false;
 
     const d = new Director({
         animations,
@@ -56,9 +60,11 @@ function kur(klipler = KLIPLER) {
             sonKlip = ad;
             sonLoop = secenekler?.loop ?? false;
             calisiyor = COK_KARELI.has(ad);
+            takildi = false;
             return true;
         },
         isRunning: () => calisiyor,
+        isStalled: () => takildi,
         sleepTimeoutMs: 0,
     });
 
@@ -83,6 +89,12 @@ function kur(klipler = KLIPLER) {
         },
         coz: () => {
             calisiyor = COK_KARELI.has(sonKlip);
+        },
+        // Kabuk kilitlendi ve kare geri cagrisi dustu: zamanlayici yok, tur
+        // bildirimi de hic gelmeyecek.
+        takil: () => {
+            calisiyor = false;
+            takildi = true;
         },
     };
 }
@@ -389,6 +401,79 @@ ol('IDLE\'ın giriş/çıkış klibi yok',
     coz();
     d.setMenuOpen(false);
     esit('menü kapanınca anında geçiş', bosalt(), ['laptop_out']);
+}
+
+// -------------------------------------------------------------------- bekçi
+//
+// `onCycle` zincirin TEK ilerletici halkasi: bir kez duserse pet o karede
+// sonsuza kadar kalir. Bekci o hâli yakalayip yeniden tetikliyor.
+
+{
+    // Dizinin ORTASINDA kopma: kalan siradan devam edilmeli.
+    const {d, bosalt, takil} = kur();
+    d.start();
+    bosalt();
+
+    d.setState('WORKING', false);   // ['laptop_out', 'typing']
+    esit('geçiş başladı', bosalt(), ['laptop_out']);
+
+    takil();                        // laptop_out'un turu hiç bildirilmedi
+    d.watchdog();
+    esit('bekçi kalan sıradan devam ediyor', bosalt(), ['typing']);
+}
+
+{
+    // Sira BOSKEN kopma: bulunulan durumun dongu klibine donulmeli.
+    const {d, bosalt, takil, tur} = kur();
+    d.start();
+    d.setState('WORKING', false);
+    tur();                          // laptop_out bitti → typing
+    esit('döngü klibine gelindi', bosalt().at(-1), 'typing');
+
+    takil();
+    d.watchdog();
+    esit('bekçi döngü klibini yeniden başlatıyor', bosalt(), ['typing']);
+}
+
+{
+    // Hicbir sey ters gitmediyse bekci NO-OP.
+    const {d, bosalt} = kur();
+    d.start();
+    d.setState('WORKING', false);
+    bosalt();
+
+    d.watchdog();
+    esit('takılma yoksa bekçi hiçbir şey yapmıyor', bosalt(), []);
+}
+
+{
+    // TUTULMUSKEN hic sorulmuyor: menusu acik ya da duraklatilmis bir pet
+    // KASITLI olarak duruyor, takilmis degil.
+    const {d, bosalt, takil} = kur();
+    d.start();
+    d.setState('WORKING', false);
+    bosalt();
+
+    d.setMenuOpen(true);
+    takil();
+    d.watchdog();
+    esit('menü açıkken bekçi karışmıyor', bosalt(), []);
+
+    d.setMenuOpen(false);
+    bosalt();
+    d.setPaused(true);
+    bosalt();
+    takil();
+    d.watchdog();
+    esit('duraklatılmışken bekçi karışmıyor', bosalt(), []);
+
+    d.setPaused(false);
+    bosalt();
+    d.setAbsent(true);
+    bosalt();
+    takil();
+    d.watchdog();
+    esit('claude kapalıyken bekçi karışmıyor', bosalt(), []);
 }
 
 print('');

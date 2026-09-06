@@ -48,7 +48,11 @@ from the settings window:
 second pet: it reaches the running instance and asks it to show the settings
 window. Autostart passes `--daemon`, so no window appears at login.
 
-**Right-click** the pet: Pause · Settings · Reset position · Quit.
+**Right-click** the pet: Pause · Settings · Reset position · Hide pet · Quit.
+
+**Hide pet** is not **Quit**: it flips the same master switch the settings
+window has, so the app keeps running and the pet comes back when you turn
+**Pet** on again. Quit ends the process.
 Move it by **dragging**; where you drop it is saved relative to the monitor.
 
 | Setting | What it does |

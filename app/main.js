@@ -214,6 +214,10 @@ class Uygulama extends Adw.Application {
         // tercihi korunuyor -- burada sifirlanan sey KONUM.
         ekle('konum-sifirla', () =>
             tamSayilariYaz({'position-x': -1, 'position-y': -1}));
+        // `Quit`ten AYRI: bu uygulamayi kapatmiyor, `enabled` anahtarini
+        // dusuruyor -- yani eklenti surumundeki `Hide pet` ile ayni sey.
+        // Iki surumun menusu ayrismasin diye burada da var.
+        ekle('gizle', () => this._settings.set_boolean('enabled', false));
         ekle('cik', () => this.quit());
     }
 
@@ -224,6 +228,7 @@ class Uygulama extends Adw.Application {
         this._menuModeli.append(this._paused ? 'Resume' : 'Pause', 'app.duraklat');
         this._menuModeli.append('Settings', 'app.ayarlar');
         this._menuModeli.append('Reset position', 'app.konum-sifirla');
+        this._menuModeli.append('Hide pet', 'app.gizle');
         this._menuModeli.append('Quit', 'app.cik');
     }
 
